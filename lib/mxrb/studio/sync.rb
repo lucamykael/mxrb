@@ -105,9 +105,11 @@ module Mxrb
             generated = File.join(scratch, 'generated')
             snapshot = File.join(scratch, 'ruby')
             export(model_path, export)
-            WriteLock.synchronize(ruby_root) { refresh_managed(export) }
+            # The Ruby project changes only once its refreshed copy generates.
             copy_tree(ruby_root, snapshot)
+            refresh_managed(export, roots: [snapshot])
             generate(generated, root: snapshot)
+            WriteLock.synchronize(ruby_root) { refresh_managed(export) }
             write_link(build_base(base_ruby: export, generated: File.join(generated, File.basename(model_path)),
                                   ruby_source: snapshot))
           end
@@ -121,6 +123,9 @@ module Mxrb
           Dir.mktmpdir('mxrb-link-') do |scratch|
             export = File.join(scratch, 'export')
             export(base_model, export)
+            # The MXRB metadata of the Ruby project mirrors the synchronized
+            # model, here the one it was converted from.
+            WriteLock.synchronize(ruby_root) { refresh_managed(export) }
             write_link(build_base(base_ruby: export, generated: nil, ruby_source: export, base_model:))
           end
           clear_conflicts
@@ -285,8 +290,7 @@ module Mxrb
         inputs = { generated_base: link['generated_model'], base_ruby: link['base_ruby'] }
         jobs = []
         if ruby
-          inputs[:generated] = File.join(scratch, 'generated', File.basename(model_path))
-          jobs << -> { generate(File.dirname(inputs[:generated]), root:) }
+          jobs << -> { inputs[:generated] = generation_of(link, root, scratch) }
           unless inputs[:generated_base]
             inputs[:generated_base] = File.join(scratch, 'generated-base', File.basename(model_path))
             jobs << -> { generate(File.dirname(inputs[:generated_base]), root: link.fetch('base_files')) }
@@ -302,6 +306,47 @@ module Mxrb
         end
         parallel(*jobs)
         inputs
+      end
+
+      # The model generated from the Ruby at `root`. The latest one is kept
+      # with the base it was compared against, so the run that applies what a
+      # dry run compared does not generate the same Ruby again.
+      def generation_of(link, root, scratch)
+        key = Digest::SHA256.hexdigest("#{link.fetch('directory')}\n#{ruby_revision(root)}")
+        cached = cached_generation(key)
+        return cached if cached
+
+        target = File.join(scratch, 'generated', File.basename(model_path))
+        generate(File.dirname(target), root:)
+        keep_generation(key, target)
+        target
+      end
+
+      def generation_path = File.join(state_directory, 'generation.json')
+
+      def generation_entry
+        JSON.parse(File.read(generation_path))
+      rescue Errno::ENOENT, JSON::ParserError
+        nil
+      end
+
+      def cached_generation(key)
+        entry = generation_entry
+        entry['model'] if entry && entry['key'] == key && File.file?(entry['model'])
+      end
+
+      # Keeps the new generation and the one before it, which a concurrent
+      # comparison may still be reading.
+      def keep_generation(key, generated)
+        previous = generation_entry&.fetch('directory', nil)
+        directory = Dir.mktmpdir('generation-', state_directory)
+        model = copy_model(generated, directory)
+        temporary = "#{generation_path}.#{SecureRandom.hex(6)}.tmp"
+        File.write(temporary, JSON.generate('key' => key, 'model' => model, 'directory' => directory))
+        File.rename(temporary, generation_path)
+        Dir.glob(File.join(state_directory, 'generation-*')).each do |stale|
+          FileUtils.rm_rf(stale) unless [directory, previous].include?(stale)
+        end
       end
 
       def parallel(*jobs)
@@ -328,13 +373,15 @@ module Mxrb
       end
 
       # `.mxrb/` holds MXRB-owned metadata (the native baseline and assets
-      # manifest); it always mirrors the synchronized model.
+      # manifest); it always mirrors the synchronized model. Project files the
+      # manifest names and the Ruby project lacks come along (Studio Pro writes
+      # Java proxies when it runs the app), so the project still generates.
       def refresh_managed(export, roots: [ruby_root])
         managed = ->(root) { each_file(root).select { _1.match?(MANAGED) } }
         incoming = managed.call(export)
         roots.each do |destination|
           (managed.call(destination) - incoming).each { FileUtils.rm_f(File.join(destination, _1)) }
-          incoming.each do |path|
+          (incoming + missing_assets(export, destination)).each do |path|
             source = File.join(export, path)
             target = File.join(destination, path)
             next if File.file?(target) && FileUtils.identical?(source, target)
@@ -344,6 +391,15 @@ module Mxrb
           end
         end
         true
+      end
+
+      def missing_assets(export, destination)
+        manifest = File.join(export, '.mxrb', 'assets.json')
+        return [] unless File.file?(manifest)
+
+        JSON.parse(File.read(manifest)).fetch('files').map { _1.fetch('path') }
+            .reject { _1.start_with?('/') || _1.split('/').include?('..') }
+            .select { File.file?(File.join(export, _1)) && !File.exist?(File.join(destination, _1)) }
       end
 
       def copy_tree(source, destination)

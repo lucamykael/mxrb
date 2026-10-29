@@ -123,6 +123,73 @@ RSpec.describe 'Studio synchronization coordination' do
     end
   end
 
+  describe 'project files of the asset manifest' do
+    def proxy = File.join('javasource', 'shop', 'proxies', 'Product.java')
+
+    it 'brings files the model gained with the refreshed manifest, so the linked Ruby still generates' do
+      ruby
+      FileUtils.mkdir_p(File.dirname(File.join(File.dirname(model), proxy)))
+      File.write(File.join(File.dirname(model), proxy), "package shop.proxies;\n")
+      expect(sync.link!).to include(linked: true, state: 'synced')
+      expect(File.read(File.join(ruby, proxy))).to eq("package shop.proxies;\n")
+      edit(product_file) { _1.sub("integer :Stock\n", "integer :Stock\n  boolean :Active\n") }
+      expect(sync.run).to include(applied: true)
+      expect(attributes('Product')).to include('Active')
+    end
+
+    it 'leaves the Ruby project untouched when its refreshed copy does not generate' do
+      native = File.join(ruby, '.mxrb', 'native_units.json')
+      File.write(native, '{}')
+      File.write(File.join(ruby, 'project.rb'), "raise 'broken'\n")
+      expect { sync.link! }.to raise_error(Mxrb::Studio::Protocol::Failure, /broken/)
+      expect(File.read(native)).to eq('{}')
+      expect(sync).not_to be_linked
+    end
+
+    it 'takes only safe paths that the export has and the Ruby project lacks' do
+      export = File.join(@directory, 'export')
+      FileUtils.mkdir_p(File.join(export, '.mxrb'))
+      expect(sync.send(:missing_assets, export, ruby)).to eq([])
+      %w[kept.txt present.txt].each { File.write(File.join(export, _1), 'x') }
+      File.write(File.join(ruby, 'present.txt'), 'y')
+      files = ['/etc/passwd', '../outside.txt', 'kept.txt', 'present.txt', 'absent.txt'].map { { 'path' => _1 } }
+      File.write(File.join(export, '.mxrb', 'assets.json'), JSON.generate('files' => files))
+      expect(sync.send(:missing_assets, export, ruby)).to eq(['kept.txt'])
+    end
+  end
+
+  describe 'generation of the compared Ruby' do
+    it 'applies what a dry run compared without generating the same Ruby again' do
+      sync.link!
+      edit(product_file) { _1.sub("integer :Stock\n", "integer :Stock\n  boolean :Active\n") }
+      expect(sync).to receive(:generate).once.and_call_original
+      expect(sync.run(dry_run: true)).to include(applied: false, state: 'pending')
+      expect(sync.run).to include(applied: true)
+      expect(attributes('Product')).to include('Active')
+    end
+
+    it 'generates again for other Ruby, a lost model or an unreadable entry, keeping the last two' do
+      sync.link!
+      stale = File.join(sync.state_directory, 'generation-stale')
+      FileUtils.mkdir_p(stale)
+      edit(product_file) { _1.sub("integer :Stock\n", "integer :Stock\n  boolean :Active\n") }
+      expect(sync).to receive(:generate).exactly(4).times.and_call_original
+      sync.run(dry_run: true)
+      first = JSON.parse(File.read(sync.send(:generation_path)))
+      expect(File).not_to exist(stale)
+      edit(order_file) { _1.sub("decimal :Total\n", "decimal :Total\n  string :Note\n") }
+      sync.run(dry_run: true)
+      second = JSON.parse(File.read(sync.send(:generation_path)))
+      expect([first, second].map { File.directory?(_1['directory']) }).to eq([true, true])
+      FileUtils.rm_f(second['model'])
+      sync.run(dry_run: true)
+      expect(File).not_to exist(first['directory'])
+      File.write(sync.send(:generation_path), '{')
+      sync.run(dry_run: true)
+      expect(JSON.parse(File.read(sync.send(:generation_path)))['key']).to eq(second['key'])
+    end
+  end
+
   describe 'Ruby saved during a run' do
     it 'keeps a Ruby edit saved mid-run pending instead of folding it into the base' do
       sync.link!
@@ -398,8 +465,11 @@ RSpec.describe 'Studio synchronization coordination' do
       Mxrb::Studio::Snapshot.new(model, destination_root: File.join(@directory, 'snapshot')).create
       edit(order_file) { _1.sub('decimal :Total', "decimal :Total\n  string :Note") }
       add_attribute('Product', 'Weight')
+      stale = File.join(ruby, '.mxrb', 'obsolete.json')
+      File.write(stale, '{}')
       linked = call('sync/link', params.merge('from_conversion' => true))
       expect(linked).to include(linked: true, state: 'pending')
+      expect(File).not_to exist(stale)
       expect(linked[:ruby_changes].map { _1[:path] }).to include('modules/Shop/domain/entities/order.rb')
       expect(linked[:mendix_changes]).not_to be_empty
     end
