@@ -62,6 +62,18 @@ export const registerJavaScriptActions = (values: Record<string, JavaScriptActio
   javaScriptActions = { ...values };
 };
 
+// Actions written for React Native only, such as a login through the phone's browser: their
+// nanoflows belong to the native mobile app, and the web app reports the call unavailable.
+export const nativeOnlyJavaScriptActions = (names: string[]): Record<string, JavaScriptAction> =>
+  Object.fromEntries(
+    names.map((name) => [
+      name,
+      () => {
+        throw new Error(`JavaScript action ${name} runs only in the native mobile app`);
+      },
+    ]),
+  );
+
 const isRecord = (value: RuntimeValue | undefined): value is EntityRecord => {
   return Boolean(
     value && typeof value === 'object' && 'id' in value && 'type' in value && 'attributes' in value,

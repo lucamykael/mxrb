@@ -328,7 +328,7 @@ module Mxrb
           <<~TS
             import './feedbackWidget';
             import './projectWidgets';
-            import { registerNanoflows, registerJavaScriptActions } from './bridge/nanoflow';#{project_actions[:import]}
+            import { registerNanoflows, registerJavaScriptActions, nativeOnlyJavaScriptActions } from './bridge/nanoflow';#{project_actions[:import]}
             import { feedbackStorageActions } from './bridge/feedbackStorage';
             import { nanoflowCommonsActions } from './bridge/nanoflowCommons';
             import { nativeMobileActions } from './bridge/nativeMobileActions';
@@ -341,7 +341,8 @@ module Mxrb
             };
 
             registerNanoflows(nanoflows);
-            registerJavaScriptActions({#{project_actions[:registration]}
+            registerJavaScriptActions({
+              ...nativeOnlyJavaScriptActions(#{JSON.generate(@native_only_javascript_actions || [])}),#{project_actions[:registration]}
               ...feedbackStorageActions(#{JSON.generate(javascript_actions)}#{feedback_options}),
               ...nanoflowCommonsActions(#{JSON.generate(commons)}),
               ...nativeMobileActions(#{JSON.generate(native)})

@@ -30,7 +30,7 @@ module Mxrb
       end
 
       # The names of the actions whose implementation targets React Native
-      # only: the browser cannot run them, so the export needs an adapter or fails.
+      # only: without an adapter the web app reports them unavailable.
       def react_native(root, names)
         actions(root, names).select { react_native?(_1) }.map(&:name)
       end

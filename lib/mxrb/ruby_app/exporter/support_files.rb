@@ -87,16 +87,16 @@ module Mxrb
         # The project's JavaScript actions the nanoflows call and no verified adapter
         # covers run their own source: their actions directory is copied, with its
         # node_modules only when an action imports a package the frontend lacks.
-        # An action written for React Native cannot run in the browser: without
-        # a verified adapter the export fails rather than ship a nanoflow that
-        # breaks at the call.
+        # An action written for React Native only belongs to the native mobile app,
+        # like the phone login of OIDC: its source is not copied, the web app reports
+        # the call unavailable, and the export names those actions.
         def write_project_javascript_actions
           root = File.dirname(@mpr_path)
           called = (@called_javascript_actions || []).to_a - KnownJavaScriptActions.adapted(root)
-          unsupported = ProjectJavaScriptActions.react_native(root, called)
-          unless unsupported.empty?
-            raise SerializationError, 'JavaScript actions target React Native and have no web adapter: ' \
-                                      "#{unsupported.join(', ')}"
+          @native_only_javascript_actions = ProjectJavaScriptActions.react_native(root, called)
+          unless @native_only_javascript_actions.empty?
+            warn '[mxrb] warning: these JavaScript actions run only in the native mobile app; ' \
+                 "the web app reports them unavailable: #{@native_only_javascript_actions.join(', ')}"
           end
 
           @project_javascript_actions = ProjectJavaScriptActions.find(root, called)
