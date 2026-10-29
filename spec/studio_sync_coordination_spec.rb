@@ -162,6 +162,55 @@ RSpec.describe 'Studio synchronization coordination' do
     end
   end
 
+  describe 'artifact states without conflicts' do
+    it 'reports an unlinked model, a pending Ruby file and files that declare no artifact' do
+      path = 'modules/Shop/domain/entities/order.rb'
+      expect(sync.document_state(path:)).to eq(linked: false, state: 'unlinked')
+      sync.link!
+      edit(order_file) { "#{_1}# touched\n" }
+      expect(sync.document_state(path:)).to include(state: 'pending', ruby: { path:, action: 'modified' })
+      expect(sync.document_state(path: 'missing.rb')).to include(state: 'synced', unit_ids: [])
+      File.write(File.join(ruby, 'notes.md'), "# Notes\n")
+      expect(sync.document_state(path: 'notes.md')).to include(unit_ids: [])
+    end
+
+    it 'names the state of a document entry from its conflicts, diagnostics and changes' do
+      entry = { conflicts: [], diagnostics: [], ruby: nil, mendix: nil }
+      expect(sync.send(:document_state_of, entry)).to eq('synced')
+      expect(sync.send(:document_state_of, entry.merge(conflicts: ['x']))).to eq('conflict')
+      errors = entry.merge(diagnostics: [{ severity: 'error' }])
+      expect(sync.send(:document_state_of, errors)).to eq('conversion_error')
+    end
+
+    it 'maps only entities, DTOs and known document kinds to units' do
+      index = { ['DomainModels$DomainModel', 'Shop'] => 'domain' }
+      expect(sync.send(:artifact_unit, index, { kind: 'entity', qualified_name: 'Shop.Order' })).to eq('domain')
+      expect(sync.send(:artifact_unit, index, { kind: 'module', qualified_name: 'Shop' })).to be_nil
+    end
+
+    it 'ignores stored conflicts without revisions' do
+      sync.link!
+      FileUtils.mkdir_p(File.dirname(sync.send(:conflicts_path)))
+      File.write(sync.send(:conflicts_path), JSON.generate(conflicts: [{ id: 'x' }]))
+      expect(sync.status[:conflicts]).to eq([])
+    end
+
+    it 'keeps error locations outside the Ruby project and removes a temporary file it could not rename' do
+      error = Mxrb::Studio::RubySourceError.new('boom', locations: [{ file: '/usr/lib/ruby/x.rb', line: 1 }])
+      expect(sync.send(:relocate, error, ruby).locations).to eq([{ file: '/usr/lib/ruby/x.rb', line: 1 }])
+      target = File.join(@directory, 'merged.rb')
+      allow(File).to receive(:rename).and_raise(Errno::EXDEV)
+      expect { sync.send(:write_file, target, "x\n") }.to raise_error(Errno::EXDEV)
+      expect(Dir.glob(File.join(@directory, '.mxrb-sync-*'))).to be_empty
+    end
+
+    it 'fails a sandboxed run before copying when no temporary workspace can be made' do
+      allow(Dir).to receive(:mktmpdir).and_call_original
+      allow(Dir).to receive(:mktmpdir).with('mxrb-sync-sandbox-').and_raise(Errno::ENOSPC)
+      expect { sync_with(:sandbox).link! }.to raise_error(Errno::ENOSPC)
+    end
+  end
+
   describe 'conflicts and artifact states' do
     before do
       sync.link!
@@ -181,6 +230,19 @@ RSpec.describe 'Studio synchronization coordination' do
 
       edit(order_file) { "#{_1}# touched\n" }
       expect(sync.status).to include(state: 'pending', conflicts: [])
+    end
+
+    it 'reads a corrupt link or stored conflicts as absent' do
+      sync.run(dry_run: true)
+      File.write(sync.send(:conflicts_path), '{')
+      expect(sync.status).to include(state: 'pending', conflicts: [])
+      File.write(sync.send(:link_path), '{')
+      expect(sync.linked?).to be(false)
+    end
+
+    it 'reports an untouched microflow document as synchronized' do
+      path = Dir.glob('**/recalculate.rb', base: ruby).first
+      expect(sync.document_state(path:)).to include(state: 'synced', ruby: nil)
     end
 
     it 'reports each changed artifact with what each side did' do
@@ -224,6 +286,14 @@ RSpec.describe 'Studio synchronization coordination' do
       raise unless e.data.is_a?(Hash) && e.data[:reason] == 'isolation_unavailable'
 
       skip "OS isolation unavailable in this test environment: #{e.message}"
+    end
+
+    it 'fails a sandboxed run as a toolchain error when OS isolation is unavailable' do
+      allow_any_instance_of(Mxrb::Studio::PreviewSandbox).to receive(:generate)
+        .and_raise(Mxrb::Studio::PreviewIsolationUnavailable, 'bubblewrap unavailable')
+      expect { sync_with(:sandbox).link! }.to raise_error(Mxrb::Studio::Protocol::Failure) do |error|
+        expect(error.data).to eq(reason: 'isolation_unavailable')
+      end
     end
 
     it 'links and applies Ruby edits through the sandbox, which cannot write the user files' do
@@ -320,6 +390,25 @@ RSpec.describe 'Studio synchronization coordination' do
       converted = call('project/convert', { 'source_model' => model, 'link' => true })
       expect(converted).to include(state: 'ready')
       expect(converted[:sync]).to include(linked: true, state: 'synced')
+    end
+
+    it 'keeps a conversion whose link fails and still lets cancellation through' do
+      sync = instance_double(Mxrb::Studio::Sync, linked?: false)
+      allow(Mxrb::Studio::Sync).to receive(:new).and_return(sync)
+      allow(sync).to receive(:link!).and_raise(ArgumentError, 'base unavailable')
+      converted = call('project/convert', { 'source_model' => model, 'link' => true })
+      expect(converted).to include(state: 'ready')
+      expect(converted[:sync]).to eq(linked: false, state: 'unlinked', error: 'base unavailable')
+      allow(sync).to receive(:link!).and_raise(Mxrb::Studio::Cancelled)
+      expect { call('project/convert', { 'source_model' => model, 'link' => true }) }
+        .to raise_error(Mxrb::Studio::Cancelled)
+    end
+
+    it 'reports the existing synchronization of a conversion that is already linked' do
+      sync = instance_double(Mxrb::Studio::Sync, linked?: true, status: { linked: true, state: 'synced' })
+      allow(Mxrb::Studio::Sync).to receive(:new).and_return(sync)
+      converted = call('project/convert', { 'source_model' => model, 'link' => true })
+      expect(converted[:sync]).to eq(linked: true, state: 'synced')
     end
   end
 end

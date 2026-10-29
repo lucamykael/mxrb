@@ -156,12 +156,37 @@ RSpec.describe 'Studio panels backend' do
       expect { store.save('name' => ' ', 'command_id' => 'validate') }.to raise_error(ArgumentError, /name/)
       expect { store.save('name' => 'x', 'command_id' => 'validate', 'extra' => '"open') }
         .to raise_error(ArgumentError)
+      expect { store.save('name' => 'x', 'command_id' => 'validate', 'values' => { 'model' => 1 }) }
+        .to raise_error(ArgumentError, 'values must be text or booleans')
+      expect { store.save('Validate') }.to raise_error(ArgumentError, 'configuration must be an object')
+      expect { store.save('name' => 'x' * 121, 'command_id' => 'validate') }
+        .to raise_error(ArgumentError, /exceeds 120/)
+      expect { store.save('name' => 'x', 'command_id' => 'validate', 'values' => []) }
+        .to raise_error(ArgumentError, 'values must be an object')
+      expect { store.save('name' => 'x', 'command_id' => 'validate', 'extra' => 1) }
+        .to raise_error(ArgumentError, 'extra arguments must be text')
+      expect { Mxrb::Studio::TaskConfigurations.new(nil, state_root:) }.to raise_error(ArgumentError, /must be a path/)
       store.save('name' => 'Lint', 'command_id' => 'lint')
       expect { store.save('name' => 'lint', 'command_id' => 'validate') }
         .to raise_error(Mxrb::Studio::Conflict, /already exists/)
       expect { store.delete('missing') }.to raise_error(ArgumentError, /unknown saved task/)
       File.write(store.path, '{')
       expect { store.list }.to raise_error(Mxrb::Studio::Conflict, /corrupt/)
+    end
+  end
+
+  describe 'saved task limits' do
+    let(:model) { create_model }
+
+    it 'refuses a task beyond the per-project limit and leaves no temporary file when the folder fails' do
+      stub_const('Mxrb::Studio::TaskConfigurations::MAXIMUM', 1)
+      store = Mxrb::Studio::TaskConfigurations.new(model, state_root:)
+      store.save('name' => 'Lint', 'command_id' => 'lint')
+      expect { store.save('name' => 'Validate', 'command_id' => 'validate') }
+        .to raise_error(ArgumentError, 'at most 1 saved tasks per project')
+      allow(FileUtils).to receive(:mkdir_p).and_call_original
+      allow(FileUtils).to receive(:mkdir_p).with(File.dirname(store.path), mode: 0o700).and_raise(Errno::EACCES)
+      expect { store.delete(store.list[:configurations].first['id']) }.to raise_error(Errno::EACCES)
     end
   end
 
@@ -208,6 +233,8 @@ RSpec.describe 'Studio panels backend' do
       expect(physical[:tables].first).to include(id: '"public"."shop$product"', logical_mapping: { status: 'unmapped' })
       expect(call('data/query', chosen.merge('payload' => { 'sql' => 'SELECT 1 AS one' })))
         .to include(connection: include(port: 55_499), sql: 'SELECT 1 AS one')
+      by_id = chosen.merge('connection' => connection[:id])
+      expect(call('data/physical', by_id)).to include(connection: include(id: connection[:id]))
     end
   end
 
