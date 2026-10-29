@@ -52,3 +52,30 @@ h2 { font-size: 13px; font-weight: 600; margin: 0 0 6px; }
 .sync-values pre { max-height: 220px; }
 @media (max-width: 450px) { .sync-values { grid-template-columns: 1fr; } }
 @media (max-width: 450px) { .tasks-content { grid-template-columns: 1fr; height: auto; } .task-catalog { max-height: 35vh; border-right: 0; border-bottom: 1px solid var(--studio-border); } .command-field { grid-template-columns: 1fr; gap: 2px; } }
+/* Ruby Sync: Studio Pro tool-window grid (Changes / Errors panes), not an editor surface. */
+.sync-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.sync-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 3px 6px; background: var(--studio-panel); border-bottom: 1px solid var(--studio-border); flex-shrink: 0; }
+.sync-toolbar button { padding: 2px 10px; }
+.sync-state { margin-left: auto; color: var(--studio-muted); overflow-wrap: anywhere; }
+.sync-state-conflict, .sync-state-conversion_error { color: var(--studio-error); }
+.sync-body { flex: 1; min-height: 0; overflow: auto; }
+.sync-message { margin: 6px 8px; overflow-wrap: anywhere; }
+.sync-unlinked { margin: 8px; }
+.sync-unlinked p { margin: 0 0 8px; }
+.sync-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.sync-grid th { position: sticky; top: 0; background: var(--studio-panel); font-weight: normal; text-align: left; padding: 3px 6px; border-bottom: 1px solid var(--studio-border); border-right: 1px solid var(--studio-border); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sync-grid td { padding: 2px 6px; height: 22px; border-bottom: 1px solid var(--studio-border); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: top; }
+.sync-grid td.value { white-space: pre-wrap; overflow-wrap: anywhere; }
+.sync-grid tr:hover td, .sync-grid tr[aria-selected=true] td { background: var(--studio-selection); }
+.sync-grid tr.state-conflict td:last-child, .sync-grid tr.state-conversion_error td:last-child { color: var(--studio-error); }
+.sync-grid .choices label { margin-right: 8px; white-space: nowrap; }
+button.link { border: 0; background: transparent; padding: 0; color: var(--studio-accent); text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
+button.link:hover { text-decoration: underline; }
+button.link.file { margin-left: 6px; }
+.sync-diagnostics { margin: 4px 8px; padding-left: 16px; color: var(--studio-error); }
+.sync-panel h2 { margin: 8px 8px 4px; }
+.sync-compare { border-top: 1px solid var(--studio-border); margin-top: 6px; }
+.sync-columns { display: grid; gap: 1px; background: var(--studio-border); }
+.sync-columns > div { background: var(--studio-background, #fff); padding: 4px 6px; min-width: 0; }
+.sync-columns pre { max-height: 240px; margin-top: 4px; }
+@media (max-width: 450px) { .sync-columns { grid-template-columns: 1fr !important; } .sync-grid th:nth-child(2), .sync-grid td:nth-child(2) { display: none; } }

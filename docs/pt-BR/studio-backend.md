@@ -54,7 +54,7 @@ compatível recebe o erro `-32015` com `data.supported`.
 | Modelo | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Dados | `data/logical`, `data/connections`, `data/physical`, `data/query`, `data/explain` |
 | Paridade | `parity/matrix` |
-| Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
+| Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/document`, `sync/run`, `sync/preview` |
 | Locks | `locks/acquire`, `locks/release`, `locks/status` |
 
 `catalog/list` devolve todos os comandos públicos da CLI e os scaffolds com um
@@ -270,6 +270,29 @@ Medido no exemplo público Sudoku (409 units, 355 arquivos Ruby, Ruby 4.0, um
 núcleo por processo): vincular 23 s, Ruby para Mendix 21 s (dominado pela
 geração do projeto inteiro a partir do Ruby), Mendix para Ruby 5 s,
 `sync/status` 0,2 s.
+
+### Coordenação com uma IDE aberta
+
+- **Revisões.** `sync/status` e `sync/run` respondem `revisions: {model, ruby}`
+  (SHA-256 das units e dos arquivos Ruby). Enviadas de volta como
+  `expected_revisions`, a execução recusa (`conflict`) aplicar algo diferente
+  do estado comparado.
+- **Cópia do Ruby.** A geração usa uma cópia privada dos arquivos Ruby feita no
+  início. Ruby salvo durante a execução continua pendente e nunca entra na nova
+  base. Antes de gravar, sob o lock do modelo e depois o do projeto Ruby, cada
+  arquivo reescrito pela mescla precisa manter o texto copiado; senão nada é
+  gravado (`conflict`). Os arquivos mesclados são substituídos atomicamente.
+- **Leases.** Uma IDE que segura as próprias gravações até recarregar o modelo
+  usa `locks/acquire` e passa o `lease` para `sync/run`.
+- **Sandbox.** A geração roda no mesmo Bubblewrap de `sync/preview`; sem
+  isolamento a execução falha (`toolchain`/`isolation_unavailable`). Só quem
+  inicia o servidor pode relaxar com `MXRB_STUDIO_SYNC_ISOLATION=process`.
+- **Conflitos** encontrados (inclusive em dry run) ficam guardados com as
+  revisões; `sync/status` deixa de mostrá-los quando qualquer lado muda.
+- **Artefatos.** `sync/status` lista `documents` (por unit nativa: o que Ruby e
+  Mendix mudaram, arquivos, diagnósticos, conflitos e `state`); `sync/document`
+  responde o estado de um artefato por `unit_id` ou `path` Ruby.
+- **Conversão.** `project/convert` com `link: true` já vincula o novo projeto.
 
 ## Uso em requisição única
 

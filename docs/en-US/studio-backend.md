@@ -50,7 +50,7 @@ receives error `-32015` with `data.supported`.
 | Model | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Data | `data/logical`, `data/connections`, `data/physical`, `data/query`, `data/explain` |
 | Parity | `parity/matrix` |
-| Sync | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
+| Sync | `sync/link`, `sync/unlink`, `sync/status`, `sync/document`, `sync/run`, `sync/preview` |
 | Locks | `locks/acquire`, `locks/release`, `locks/status` |
 
 `catalog/list` returns every public CLI command and scaffold with a typed
@@ -239,6 +239,38 @@ as it is and the Ruby changes stay pending.
 from the synchronized Ruby means something different from the model itself.
 They show which parts of a model the Ruby projection does not capture yet;
 their native content is preserved, not converted.
+
+### Coordination with an open IDE
+
+- **Revisions.** `sync/status` and every `sync/run` answer `revisions:
+  {model, ruby}` (SHA-256 of the units and of the Ruby files). Passing them
+  back as `expected_revisions` makes the run refuse (`conflict`) to apply
+  anything but the state that was compared, typically by a dry run the user
+  reviewed.
+- **Ruby copy.** A run generates from a private copy of the Ruby files taken
+  when it starts. Ruby saved while it runs stays pending; it is never folded
+  into the new base. Before writing, under the model lock and then the Ruby
+  project lock, every Ruby file the Mendix merge rewrites must still hold the
+  copied text, otherwise nothing is written (`conflict`). Merged files are
+  replaced atomically.
+- **Leases.** An IDE that keeps its own saves out until it has reloaded the
+  model takes `locks/acquire` on the model and passes the `lease` to
+  `sync/run`, which then writes under that held lock.
+- **Sandbox.** Generation of the Ruby project runs in the same Bubblewrap
+  sandbox as `sync/preview`; without isolation the run fails with
+  `toolchain`/`isolation_unavailable`. Only the process that starts the
+  server can relax this with `MXRB_STUDIO_SYNC_ISOLATION=process` (for
+  example, CI without user namespaces).
+- **Conflicts** found by a run, dry runs included, are kept with the
+  revisions they were found at; `sync/status` stops reporting them once either
+  side changes.
+- **Artifacts.** `sync/status` lists `documents`: one entry per changed native
+  unit (a document, or a module's domain model for entities) with what Ruby
+  and Mendix did, its files, diagnostics, conflicts and `state`.
+  `sync/document` answers the state of one artifact by `unit_id` or Ruby
+  `path`.
+- **Conversion.** `project/convert` with `link: true` links the new Ruby
+  project at once, so the first edits on either side are synchronized.
 
 Measured on the public Sudoku sample (409 units, 355 Ruby files, Ruby 4.0,
 one core per worker): linking 23 s, Ruby to Mendix 21 s (dominated by

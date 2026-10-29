@@ -7,7 +7,7 @@ export type StudioContext = {
   theme?: Record<string, string>;
   capabilities?: { native_ruby_editor?: boolean; native_dialogs?: boolean };
 };
-export type PanelKind = 'explorer' | 'tasks' | 'er' | 'database' | 'parity';
+export type PanelKind = 'explorer' | 'tasks' | 'sync' | 'er' | 'database' | 'parity';
 export type Entry = { name: string; path: string; directory: boolean; size: number };
 export type FileContent = { path: string; text: string; revision: string };
 export type CommandField = { key: string; label: string; kind: string; required: boolean;

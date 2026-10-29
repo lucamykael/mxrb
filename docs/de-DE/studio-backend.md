@@ -54,7 +54,7 @@ unterstützte Version erhält den Fehler `-32015` mit `data.supported`.
 | Modell | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
 | Daten | `data/logical`, `data/connections`, `data/physical`, `data/query`, `data/explain` |
 | Parität | `parity/matrix` |
-| Synchronisierung | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
+| Synchronisierung | `sync/link`, `sync/unlink`, `sync/status`, `sync/document`, `sync/run`, `sync/preview` |
 | Sperren | `locks/acquire`, `locks/release`, `locks/status` |
 
 `catalog/list` liefert jeden öffentlichen CLI-Befehl und jedes Scaffold mit
@@ -280,6 +280,29 @@ Gemessen am öffentlichen Sudoku-Beispiel (409 Units, 355 Ruby-Dateien, Ruby
 4.0, ein Kern pro Kindprozess): Verknüpfen 23 s, Ruby nach Mendix 21 s
 (bestimmt durch die Generierung des gesamten Projekts aus Ruby), Mendix nach
 Ruby 5 s, `sync/status` 0,2 s.
+
+### Abstimmung mit einer offenen IDE
+
+- **Revisionen.** `sync/status` und `sync/run` liefern `revisions: {model, ruby}`
+  (SHA-256 der Units und der Ruby-Dateien). Als `expected_revisions`
+  zurückgegeben, verweigert der Lauf (`conflict`) alles außer dem verglichenen
+  Stand.
+- **Ruby-Kopie.** Generiert wird aus einer privaten Kopie der Ruby-Dateien vom
+  Start des Laufs. Währenddessen gespeichertes Ruby bleibt ausstehend und
+  gelangt nie in die neue Basis. Vor dem Schreiben (Modell-Lock, dann
+  Ruby-Projekt-Lock) muss jede durch den Merge geänderte Datei noch den
+  kopierten Text enthalten, sonst wird nichts geschrieben (`conflict`).
+- **Leases.** Eine IDE, die ihre eigenen Speichervorgänge bis zum Neuladen
+  zurückhält, nimmt `locks/acquire` und übergibt den `lease` an `sync/run`.
+- **Sandbox.** Die Generierung läuft in derselben Bubblewrap-Sandbox wie
+  `sync/preview`; ohne Isolation schlägt der Lauf fehl
+  (`toolchain`/`isolation_unavailable`). Nur der startende Prozess kann dies
+  mit `MXRB_STUDIO_SYNC_ISOLATION=process` lockern.
+- **Konflikte** eines Laufs (auch Probeläufe) werden mit ihren Revisionen
+  gespeichert und verschwinden aus `sync/status`, sobald sich eine Seite ändert.
+- **Artefakte.** `sync/status` listet `documents` je nativer Unit;
+  `sync/document` liefert den Zustand eines Artefakts per `unit_id` oder `path`.
+- **Konvertierung.** `project/convert` mit `link: true` verknüpft sofort.
 
 ## Einzelaufrufe
 

@@ -61,6 +61,8 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
         progress: value => { if (current === epoch.current) setProgress(String(value.detail ?? value.kind ?? '')); }
       });
       if (current === epoch.current) { setRoot(result.root ?? undefined); setState(result.state); }
+      // Other panels (Ruby Sync) and native editors show the new representation's state.
+      rpc.call('host/sync/changed', {}).catch(() => undefined);
     } catch (reason) { if (current === epoch.current) { setError(String(reason)); setState('missing'); } }
   }
 

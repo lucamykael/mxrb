@@ -40,7 +40,7 @@ module Mxrb
         'data/logical' => :data_logical, 'data/connections' => :data_connections, 'data/physical' => :data_physical,
         'data/query' => :data_query, 'data/explain' => :data_explain, 'parity/matrix' => :parity_matrix,
         'sync/link' => :sync_link, 'sync/unlink' => :sync_unlink, 'sync/status' => :sync_status,
-        'sync/run' => :sync_run, 'sync/preview' => :sync_preview,
+        'sync/run' => :sync_run, 'sync/preview' => :sync_preview, 'sync/document' => :sync_document,
         'locks/acquire' => :locks_acquire, 'locks/release' => :locks_release, 'locks/status' => :locks_status
       }.freeze
 
@@ -231,11 +231,27 @@ module Mxrb
       def project_status(params, _context) = ruby_project(params).status
       def project_attach(params, _context) = ruby_project(params).attach(root: params.fetch('root'))
 
+      # With `link`, the new Ruby project also becomes the synchronization
+      # base of the source model at once, before either side is edited.
       def project_convert(params, context)
         project = ruby_project(params)
-        context.with_progress('Converting to Ruby') do
+        result = context.with_progress('Converting to Ruby') do
           Isolated.run(context) { project.convert(model: params['model']) }
         end
+        return result unless params.fetch('link', false) && result[:state] == 'ready'
+
+        result.merge(sync: link_conversion(project, result.fetch(:root), params, context))
+      end
+
+      # The conversion stands even when linking fails; the base can be linked later.
+      def link_conversion(project, root, params, context)
+        sync = Sync.new(project.source_model, ruby_root: root, state_root: state_root(params), context:,
+                                              isolation: sync_isolation)
+        sync.linked? ? sync.status : sync.link!
+      rescue Cancelled
+        raise
+      rescue StandardError, ScriptError => e
+        { linked: false, state: 'unlinked', error: e.message }
       end
 
       def documents_list(params, _context) = documents(params).list
@@ -305,9 +321,19 @@ module Mxrb
       def sync_unlink(params, context) = sync(params, context).unlink!
       def sync_status(params, context) = sync(params, context).status
 
+      # `lease` (from locks/acquire on the same model) runs the write under the
+      # lock the client already holds, e.g. while the IDE keeps its own saves
+      # out until it has reloaded the model.
       def sync_run(params, context)
-        sync(params, context).run(resolutions: params.fetch('resolutions', {}),
-                                  dry_run: params.fetch('dry_run', false))
+        with_lease(params) do
+          sync(params, context).run(resolutions: params.fetch('resolutions', {}),
+                                    dry_run: params.fetch('dry_run', false),
+                                    expected_revisions: params['expected_revisions'])
+        end
+      end
+
+      def sync_document(params, context)
+        sync(params, context).document_state(unit_id: params['unit_id'], path: params['path'])
       end
 
       def sync_preview(params, context)
@@ -440,7 +466,37 @@ module Mxrb
 
       def sync(params, context)
         load_model_support
-        Sync.new(params.fetch('model'), ruby_root: params.fetch('ruby_root'), state_root: state_root(params), context:)
+        Sync.new(params.fetch('model'), ruby_root: params.fetch('ruby_root'), state_root: state_root(params), context:,
+                                        isolation: sync_isolation)
+      end
+
+      # Ruby generation for synchronization runs in the sandbox; only the
+      # process that starts the backend can relax that (e.g. CI without user
+      # namespaces).
+      def sync_isolation = ENV.fetch('MXRB_STUDIO_SYNC_ISOLATION', 'sandbox').to_sym
+
+      def with_lease(params)
+        return yield if params['lease'].nil?
+
+        path = leased_path(params['lease'], params.fetch('model'))
+        held = (Thread.current[WriteLock::HELD] ||= [])
+        held << path
+        begin
+          yield
+        ensure
+          held.delete_at(held.rindex(path))
+        end
+      end
+
+      def leased_path(id, model)
+        lease = @mutex.synchronize { @leases[id] }
+        raise ArgumentError, 'unknown lease' unless lease
+        unless lease[:lock].path == WriteLock.path_for(File.realpath(model))
+          raise ArgumentError,
+                'the lease does not hold this model'
+        end
+
+        lease[:lock].path
       end
     end
   end

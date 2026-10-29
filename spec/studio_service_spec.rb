@@ -10,10 +10,13 @@ RSpec.describe Mxrb::Studio::Service do
     Dir.mktmpdir('mxrb-studio-service-') do |directory|
       @directory = directory
       original = ENV.fetch('XDG_STATE_HOME', nil)
+      isolation = ENV.fetch('MXRB_STUDIO_SYNC_ISOLATION', nil)
       ENV['XDG_STATE_HOME'] = File.join(directory, 'xdg')
+      ENV['MXRB_STUDIO_SYNC_ISOLATION'] = 'process'
       example.run
     ensure
       ENV['XDG_STATE_HOME'] = original
+      ENV['MXRB_STUDIO_SYNC_ISOLATION'] = isolation
     end
   end
 

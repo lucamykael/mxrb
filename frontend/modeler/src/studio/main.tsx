@@ -7,10 +7,11 @@ import { GlobalEr } from './GlobalEr';
 import { DatabaseExplorer } from './DatabaseExplorer';
 import { Parity } from './Parity';
 import type { PanelKind, StudioContext } from './types';
+import { SyncPanel } from './SyncPanel';
 import './studio.css';
 import './panels.css';
 
-const PANELS: [PanelKind, string][] = [['explorer', 'Ruby App Explorer'], ['tasks', 'MXRB Tasks'],
+const PANELS: [PanelKind, string][] = [['explorer', 'Ruby App Explorer'], ['tasks', 'MXRB Tasks'], ['sync', 'Ruby Sync'],
   ['er', 'MXRB Global ER'], ['database', 'MXRB Database'], ['parity', 'MXRB Parity']];
 
 const rpc = new StudioRpc();
@@ -47,6 +48,7 @@ function App() {
     </nav>}
     {(!context.panel || context.panel === 'explorer') && <div hidden={(context.panel ?? panel) !== 'explorer'}><Explorer rpc={rpc} context={context} /></div>}
     {(!context.panel || context.panel === 'tasks') && <div hidden={(context.panel ?? panel) !== 'tasks'}><Tasks rpc={rpc} context={context} /></div>}
+    {(context.panel === 'sync' || (!context.panel && opened.has('sync'))) && <div hidden={(context.panel ?? panel) !== 'sync'}><SyncPanel rpc={rpc} context={context} /></div>}
     {(context.panel === 'er' || (!context.panel && opened.has('er'))) && <div hidden={(context.panel ?? panel) !== 'er'}><GlobalEr rpc={rpc} context={context} /></div>}
     {(context.panel === 'database' || (!context.panel && opened.has('database'))) && <div hidden={(context.panel ?? panel) !== 'database'}><DatabaseExplorer rpc={rpc} context={context} /></div>}
     {(context.panel === 'parity' || (!context.panel && opened.has('parity'))) && <div hidden={(context.panel ?? panel) !== 'parity'}><Parity rpc={rpc} context={context} /></div>}

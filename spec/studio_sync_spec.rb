@@ -21,7 +21,9 @@ RSpec.describe Mxrb::Studio::Sync do
 
   let(:model) { create_model(format: @format || :v1) }
   let(:ruby) { export(model) }
-  let(:sync) { described_class.new(model, ruby_root: ruby, state_root: File.join(@directory, 'state')) }
+  let(:sync) do
+    described_class.new(model, ruby_root: ruby, state_root: File.join(@directory, 'state'), isolation: :process)
+  end
 
   def create_model(format: :v1)
     path = File.join(@directory, 'app', 'Shop.mpr')
@@ -402,7 +404,7 @@ RSpec.describe Mxrb::Studio::Sync do
     sync.link!
     allow(sync).to receive(:copy_tree).and_raise(Errno::ENOSPC)
     before = Dir.children(sync.state_directory)
-    expect { sync.send(:build_base, base_ruby: nil, generated: nil) }.to raise_error(Errno::ENOSPC)
+    expect { sync.send(:build_base, base_ruby: nil, generated: nil, ruby_source: ruby) }.to raise_error(Errno::ENOSPC)
     expect(Dir.children(sync.state_directory)).to match_array(before)
     expect { sync.send(:parallel, -> { 1 }, -> { raise ArgumentError, 'job failed' }) }
       .to raise_error(ArgumentError, 'job failed')
