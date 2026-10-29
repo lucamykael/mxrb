@@ -302,21 +302,23 @@ mesmos métodos, para clientes que iniciam um processo por requisição.
 
 ## Painéis do Studio Pro
 
-Os painéis iniciais Ruby App Explorer e MXRB Tasks estão em
-`frontend/modeler/src/studio`, com entrada `studio.html`. Compile usando
-`npm run build:studio` em `frontend/modeler`; Node é dependência somente de build.
-Os outros bundles do modeler são preservados por uma configuração Vite separada.
+A entrada adicional `frontend/modeler/studio.html` fornece, em React, os painéis
+Ruby App Explorer, MXRB Tasks, ER global, Banco de dados e Paridade. Compile com
+`npm run build:studio` em `frontend/modeler`; a entrada compilada e os recursos
+locais são distribuídos na gem. Node é dependência somente de build, e essa
+configuração Vite separada preserva os outros bundles do modeler.
 
-O transporte é `chrome.webview`: o host desktop mantém o processo Ruby e fornece
-`host/context`/`host/contextChanged` com `root`, `source_model`, `ruby_root` opcional
-e variáveis CSS de tema `--studio-*`. Essas mensagens pertencem ao host, não ao
-serviço Ruby. O Explorer oferece descoberta/conversão de vínculo, leitura de pastas
-sob demanda, linhas virtualizadas e prévia explicitamente somente leitura. Tarefas
-usam o catálogo e os argumentos reais, saída e cancelamento. Registro no dock,
-criação/renomeação/worktrees na interface, tarefas salvas, editor Ruby nativo e
-resolução de conflitos continuam pendentes. Os cenários
-`spec/fixtures/frontend_browser/studio_panels*_flow.json` validam o escopo inicial
-com arquivos sintéticos e não certificam paridade completa da IDE.
+Os painéis falam o protocolo acima por `chrome.webview.postMessage` e pelo evento
+`message`. O host desktop mantém o processo Ruby, negocia o protocolo 2 e mapeia
+os IDs de requisição da página para a conexão compartilhada. Ele também atende
+`host/context` e `host/contextChanged`: `root` do projeto, `source_model`,
+`ruby_root` opcional e variáveis CSS de tema `--studio-*`. Essas duas mensagens
+pertencem ao adaptador desktop, não a `Mxrb::Studio::Service`. Os painéis não
+podem encerrar o processo compartilhado. Quando o contexto anuncia
+`capabilities.native_dialogs`, os painéis pedem ao host os diálogos de
+renomeação e aviso com `host/dialog`
+(`{kind: "input"|"confirm", title, message, label, value, buttons}` →
+`{button, value}`); sem essa capacidade, mostram um diálogo equivalente na página.
 
 Antes de cada tarefa, o painel consulta `project/status` quando o host não fornece
 `ruby_root`. Assim, uma conversão ou vínculo feito em outro dock define a pasta de
@@ -324,9 +326,27 @@ execução e a substituição `{ruby}` imediatamente. `{root}` acompanha essa pa
 `{mpr}` continua apontando para o modelo nativo. Sem vínculo, comandos nativos ou
 globais podem usar a pasta de origem; comandos do contexto Ruby pedem conversão ou
 vínculo primeiro. Trocar de projeto ou pressionar Stop cancela também a consulta
-pendente. Os testes estão em `npm run test:studio`, em `frontend/modeler`, e no
-cenário `studio_tasks_linked_flow.json`, que executa `project inspect` num projeto
-sintético vinculado com módulo `Shop`, recebendo do host somente o contexto nativo.
+pendente.
+
+`npm run test:studio`, em `frontend/modeler`, cobre as regressões de pasta de
+trabalho e cancelamento. O cenário `studio_tasks_linked_flow.json` testa só o
+painel Tasks: o host fornece `panel: "tasks"`, `root` e `source_model` (sem
+`ruby_root`) para um modelo sintético cujo projeto Ruby vinculado contém o módulo
+`Shop`, executa o comando real `project inspect` e confere a saída do projeto
+convertido.
+
+O Explorer oferece descoberta/conversão de vínculo, leitura de pastas sob demanda,
+linhas virtualizadas, criação de arquivo/pasta, renomeação e exclusão pelos
+diálogos do Studio Pro fornecidos pelo host (`host/dialog`) e worktrees Git. Tasks
+agrupa o catálogo real como a janela Maven do IntelliJ, guarda tarefas por projeto
+e mostra a saída com Stop, Clear e Scroll lock. O ER global mostra o modelo lógico
+de todos os módulos num só canvas; o painel Banco de dados mostra esquema físico,
+resultados SQL/OQL e planos apenas para uma conexão escolhida explicitamente; o
+painel Paridade mostra `parity/matrix`. Os cenários de navegador em
+`spec/fixtures/frontend_browser/studio_*_flow.json` exercitam os painéis com
+arquivos sintéticos, um app público de exemplo e, em
+`studio_database_live_flow.json`, um workspace de banco do MXRB em execução; eles
+não certificam paridade completa da IDE.
 
 O host pode publicar `project_revision` numérico em `host/contextChanged` quando
 uma conversão ou mudança de vínculo mantém o mesmo `source_model`. O Explorer

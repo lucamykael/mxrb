@@ -63,29 +63,6 @@ Kindprozess aus und sendet die Benachrichtigungen `tasks/started` und
 `tasks/output`. Das Abbrechen der Anfrage stoppt den Task (`cancelled: true`
 im Ergebnis).
 
-Das Tasks-Panel fragt vor jedem Start `project/status` ab, wenn der Host kein
-`ruby_root` liefert. Eine Konvertierung oder Verknüpfung in einem anderen Dock
-bestimmt damit das Arbeitsverzeichnis und `{ruby}`; `{root}` folgt diesem
-Verzeichnis, `{mpr}` bezeichnet weiterhin das native Modell. Ohne Verknüpfung
-können native/globale Befehle das Quellverzeichnis nutzen; Ruby-Befehle verlangen
-zuerst eine Konvertierung oder Verknüpfung. Projektwechsel und Stop brechen auch
-die laufende Abfrage ab. `npm run test:studio` in `frontend/modeler` prüft diese
-Auflösung. Das Browserszenario `studio_tasks_linked_flow.json` führt
-`project inspect` mit einem synthetischen verknüpften Projekt mit Modul `Shop`
-aus; der Host liefert dabei den nativen Kontext ohne `ruby_root`.
-
-Der Host kann in `host/contextChanged` eine numerische `project_revision`
-veröffentlichen, wenn eine Konvertierung oder Verknüpfungsänderung dasselbe
-`source_model` behält. Der Explorer fragt dann `project/status` erneut ab und
-verwirft Auswahl und Auflistung; Tasks bricht die laufende Operation ab. Der
-native Host invalidiert damit den Kontext, statt `ruby_root` dauerhaft als
-Verknüpfung zwischenzuspeichern. Das Szenario `studio_project_revision_flow.json`
-prüft diesen Übergang und das Verwerfen später Antworten mit dem synthetischen
-Host aus `node frontend/modeler/test/studio/contextRevisionServer.mjs 4587`.
-Derselbe Server bedient `/studio.html?fixture=sync` für die Szenarien
-`studio_sync_preview*_flow.json`. Die synthetischen Hosts sind TypeScript-Quellen
-in `spec/fixtures/frontend_browser`, die ohne Typen ausgeliefert werden.
-
 `ruby/syntax` parst mit Prism und liefert Diagnosen mit Zeile und Spalte;
 `ruby/declarations` listet die Mendix-Artefakte, die eine Datei deklariert
 (`entity`, `page`, `microflow`, ...), mit ihren qualifizierten Namen. Keine der
@@ -310,5 +287,66 @@ Ruby 5 s, `sync/status` 0,2 s.
 `action`-Namen der Version 1 (`catalog`, `file_read`, `model_apply`, ...)
 entgegen und erreicht dieselben Methoden, für Clients, die pro Anfrage einen
 Prozess starten.
+
+## Studio-Pro-Panels
+
+Der zusätzliche Einstiegspunkt `frontend/modeler/studio.html` stellt die Panels
+Ruby App Explorer, MXRB Tasks, globales ER, Datenbank und Parität in React bereit.
+Gebaut wird er mit `npm run build:studio` in `frontend/modeler`; der kompilierte
+Einstiegspunkt und die lokalen Ressourcen werden mit dem Gem ausgeliefert. Node ist
+nur eine Build-Abhängigkeit, und die getrennte Vite-Konfiguration lässt die übrigen
+Modeler-Bundles unverändert.
+
+Die Panels sprechen das obige Protokoll über `chrome.webview.postMessage` und das
+Ereignis `message`. Der Desktop-Host besitzt den Ruby-Prozess, handelt Protokoll 2
+aus und ordnet die Anfrage-IDs der Seite seiner gemeinsamen Verbindung zu.
+Zusätzlich bedient er `host/context` und `host/contextChanged`: Projekt-`root`,
+`source_model`, optional `ruby_root` und Theme-CSS-Variablen namens `--studio-*`.
+Diese beiden Nachrichten gehören zum Desktop-Adapter, nicht zu
+`Mxrb::Studio::Service`. Panels können den gemeinsamen Prozess nicht beenden.
+Meldet der Kontext `capabilities.native_dialogs`, fordern die Panels Umbenennungs-
+und Warndialoge mit `host/dialog` beim Host an
+(`{kind: "input"|"confirm", title, message, label, value, buttons}` →
+`{button, value}`); sonst zeigen sie einen gleichwertigen Dialog in der Seite.
+
+Das Tasks-Panel fragt vor jedem Start `project/status` ab, wenn der Host kein
+`ruby_root` liefert. Eine Konvertierung oder Verknüpfung in einem anderen Dock
+bestimmt damit sofort das Arbeitsverzeichnis und `{ruby}`; `{root}` folgt diesem
+Verzeichnis, `{mpr}` bezeichnet weiterhin das native Modell. Ohne Verknüpfung
+können native/globale Befehle das Quellverzeichnis nutzen; Ruby-Befehle verlangen
+zuerst eine Konvertierung oder Verknüpfung. Projektwechsel und Stop brechen auch
+die laufende Abfrage ab.
+
+`npm run test:studio` in `frontend/modeler` prüft die Regressionen von
+Arbeitsverzeichnis und Abbruch. Das Browserszenario `studio_tasks_linked_flow.json`
+betrifft nur Tasks: Der Host liefert `panel: "tasks"`, `root` und `source_model`
+(ohne `ruby_root`) für ein synthetisches Modell, dessen verknüpftes Ruby-Projekt
+das Modul `Shop` enthält, führt den echten Befehl `project inspect` aus und prüft
+die Ausgabe des konvertierten Projekts.
+
+Der Explorer bietet Suche/Konvertierung der Verknüpfung, bedarfsweises Lesen von
+Ordnern, virtualisierte Zeilen, Anlegen von Dateien/Ordnern, Umbenennen und Löschen
+über die Studio-Pro-Dialoge des Hosts (`host/dialog`) sowie Git-Worktrees. Tasks
+gruppiert den echten Katalog wie das Maven-Fenster von IntelliJ, speichert Tasks je
+Projekt und zeigt die Ausgabe mit Stop, Clear und Scroll lock. Das globale ER zeigt
+das logische Modell aller Module auf einer Fläche; das Datenbank-Panel zeigt
+physisches Schema, SQL/OQL-Ergebnisse und Pläne nur für eine ausdrücklich gewählte
+Verbindung; das Paritäts-Panel zeigt `parity/matrix`. Browserszenarien unter
+`spec/fixtures/frontend_browser/studio_*_flow.json` prüfen die Panels mit
+synthetischen Dateien, einer öffentlichen Beispiel-App und, bei
+`studio_database_live_flow.json`, einem laufenden MXRB-Datenbank-Workspace; volle
+IDE-Parität belegen sie nicht.
+
+Der Host kann in `host/contextChanged` eine numerische `project_revision`
+veröffentlichen, wenn eine Konvertierung oder Verknüpfungsänderung dasselbe
+`source_model` behält. Der Explorer fragt dann `project/status` erneut ab und
+verwirft Auswahl und Auflistung; Tasks bricht die laufende Operation ab. Der
+native Host invalidiert damit den Kontext, statt `ruby_root` dauerhaft als
+Verknüpfung zwischenzuspeichern. Das Szenario `studio_project_revision_flow.json`
+prüft diesen Übergang und das Verwerfen später Antworten mit dem synthetischen
+Host aus `node frontend/modeler/test/studio/contextRevisionServer.mjs 4587`.
+Derselbe Server bedient `/studio.html?fixture=sync` für die Szenarien
+`studio_sync_preview*_flow.json`. Die synthetischen Hosts sind TypeScript-Quellen
+in `spec/fixtures/frontend_browser`, die ohne Typen ausgeliefert werden.
 
 [Zurück zum Dokumentationsindex](README.md)
