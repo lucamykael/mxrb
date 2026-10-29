@@ -1,0 +1,1019 @@
+{
+ "version": 1,
+ "studio_pro_baseline": "11.12.1",
+ "policy": [
+  "States are per capability and per dimension; they are not summed or weighted.",
+  "source_present_coverage_unassessed means code exists; it is not test or equivalence evidence.",
+  "original_backend means the IDE still uses Studio Pro logic for that capability.",
+  "Command catalog access in MXRB Tasks does not establish product parity."
+ ],
+ "states": {
+  "implemented_tested_scope": "Ruby implementation with automated tests for the stated scope",
+  "source_present_coverage_unassessed": "Ruby source exists; coverage and equivalence not assessed",
+  "partial": "Some operations implemented; others listed as gaps",
+  "missing": "No MXRB implementation",
+  "not_applicable": "Dimension does not apply",
+  "not_assessed": "Not yet inventoried or evidenced",
+  "accepted_integrated_studio": "Exercised in the integrated IDE",
+  "accepted_harness": "Exercised in an isolated panel harness only",
+  "implemented_unaccepted": "IDE surface implemented, not yet accepted in the integrated IDE",
+  "original_backend": "IDE surface uses the original Studio Pro logic",
+  "task_catalog": "Reachable as a typed task in MXRB Tasks",
+  "validated_scope": "Behaviour validated for the stated scope",
+  "not_validated": "Behaviour not validated",
+  "yes": "Works without Studio Pro logic",
+  "no": "Depends on Studio Pro logic or has no Ruby implementation",
+  "present": "Capability exists in Studio Pro"
+ },
+ "ide_surfaces": {
+  "Ruby App Explorer": {
+   "state": "accepted_integrated_studio",
+   "scope": "Conversion, tree, add/rename through native dialogs and the editor-buffer guard on rename/delete in the integrated IDE; worktree add/switch/remove covered by backend specs and browser acceptance only"
+  },
+  "Ruby code editor": {
+   "state": "accepted_integrated_studio",
+   "scope": "Open, edit, save and conflict handling; navigation and debugger pending"
+  },
+  "MXRB Tasks": {
+   "state": "accepted_integrated_studio",
+   "scope": "Typed command run with streamed output, saved tasks per project, Stop and project switch stop the task process"
+  },
+  "MXRB Global ER": {
+   "state": "accepted_integrated_studio",
+   "scope": "Read-only logical ER across modules; never claims physical tables"
+  },
+  "MXRB Database": {
+   "state": "accepted_integrated_studio",
+   "scope": "Explicit connection, physical schema, SQL/OQL and plans against a local MXRB PostgreSQL workspace"
+  },
+  "MXRB Parity": {
+   "state": "accepted_integrated_studio",
+   "scope": "Read-only matrix view in both directions"
+  }
+ },
+ "studio_pro_to_mxrb": [
+  {
+   "id": "domain.entities",
+   "family": "domain_model",
+   "capability": "Create, edit and delete entities (persistable and non-persistable)",
+   "studio_pro": "Domain model editor, Properties pane",
+   "mxrb": [
+    "Mxrb.define { module { entity } } (Mxrb::DSL::EntityBuilder)",
+    "Mxrb::Studio::ModelOperations add_entity / remove_entity (model/preview, model/apply)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "implemented_tested_scope",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "partial",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [
+    "spec/studio_model_operations_spec.rb"
+   ],
+   "gaps": [
+    "Visual editing still runs on the original domain model backend",
+    "Entity events, validation rules and access rules need typed operations"
+   ]
+  },
+  {
+   "id": "domain.attributes",
+   "family": "domain_model",
+   "capability": "Attributes, types, defaults and calculated attributes",
+   "studio_pro": "Domain model editor, attribute dialog",
+   "mxrb": [
+    "DSL string/integer/long/decimal/boolean/datetime/enum_of attributes",
+    "ModelOperations add_attribute / change_attribute / remove_attribute"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "implemented_tested_scope",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "partial",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [
+    "spec/studio_model_operations_spec.rb"
+   ],
+   "gaps": [
+    "Calculated attributes have no typed operation"
+   ]
+  },
+  {
+   "id": "domain.associations",
+   "family": "domain_model",
+   "capability": "Associations, owner, multiplicity and delete behaviour",
+   "studio_pro": "Domain model editor, association dialog",
+   "mxrb": [
+    "DSL association (EntityBuilder#association)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "missing",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "No typed Studio operation edits associations"
+   ]
+  },
+  {
+   "id": "domain.generalization",
+   "family": "domain_model",
+   "capability": "Generalization (inheritance) and system members",
+   "studio_pro": "Entity dialog: generalization, system members",
+   "mxrb": [
+    "DSL generalizes, system_members"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "missing",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "No typed Studio operation changes generalization"
+   ]
+  },
+  {
+   "id": "domain.indexes",
+   "family": "domain_model",
+   "capability": "Entity indexes",
+   "studio_pro": "Entity dialog: indexes",
+   "mxrb": [
+    "DSL index"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "Index editing through the Studio backend is not implemented"
+   ]
+  },
+  {
+   "id": "domain.view_entities",
+   "family": "domain_model",
+   "capability": "View entities (OQL views)",
+   "studio_pro": "Domain model: view entity, OQL editor",
+   "mxrb": [
+    "DSL oql_view",
+    "Mxrb::Oql::Translator"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "OQL view editing in the IDE uses the original editor"
+   ]
+  },
+  {
+   "id": "domain.layout",
+   "family": "domain_model",
+   "capability": "Domain model diagram layout",
+   "studio_pro": "Domain model canvas positions and anchors",
+   "mxrb": [
+    "Mxrb::DomainDiagram::Document (positions and anchors)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "Global ER is a separate read-only IDE view and never changes the Mendix layout"
+   ]
+  },
+  {
+   "id": "domain.global_er",
+   "family": "domain_model",
+   "capability": "Cross-module ER of the whole app",
+   "studio_pro": "Not in Studio Pro (domain models are per module)",
+   "mxrb": [
+    "Mxrb::Studio::DataExplorer#logical (data/logical)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "implemented_tested_scope",
+    "ruby_dsl": "not_applicable",
+    "ide": "accepted_integrated_studio",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "validated_scope",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "yes"
+   },
+   "evidence": [
+    "spec/studio_data_explorer_spec.rb"
+   ],
+   "gaps": []
+  },
+  {
+   "id": "microflows.edit",
+   "family": "microflows_nanoflows",
+   "capability": "Microflow editing: activities, decisions, loops, error handling",
+   "studio_pro": "Microflow editor and toolbox",
+   "mxrb": [
+    "Mxrb::DSL::FlowProgram (main_line and activity methods)",
+    "Mxrb.define { microflow }"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": [
+    "Visual microflow edits are not routed through MXRB"
+   ]
+  },
+  {
+   "id": "microflows.nanoflows",
+   "family": "microflows_nanoflows",
+   "capability": "Nanoflows",
+   "studio_pro": "Nanoflow editor",
+   "mxrb": [
+    "DSL nanoflow, FlowProgram"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": [
+    "Offline/native nanoflow runtime parity not validated"
+   ]
+  },
+  {
+   "id": "microflows.rules",
+   "family": "microflows_nanoflows",
+   "capability": "Rules",
+   "studio_pro": "Rule editor",
+   "mxrb": [
+    "DSL rule"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "microflows.expressions",
+   "family": "microflows_nanoflows",
+   "capability": "Expressions and expression editor",
+   "studio_pro": "Expression editor with completion",
+   "mxrb": [
+    "Flow DSL expression strings"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "No Ruby expression completion or validation service in the IDE"
+   ]
+  },
+  {
+   "id": "microflows.debugger",
+   "family": "microflows_nanoflows",
+   "capability": "Microflow debugger (breakpoints, variables)",
+   "studio_pro": "Debugger pane",
+   "mxrb": [],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "missing",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "No MXRB debugger API"
+   ]
+  },
+  {
+   "id": "pages.edit",
+   "family": "pages_widgets",
+   "capability": "Pages and widgets",
+   "studio_pro": "Page editor (structure and design modes)",
+   "mxrb": [
+    "Mxrb.define { page } (PageBuilder, widget builders)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": [
+    "Visual page edits are not routed through MXRB"
+   ]
+  },
+  {
+   "id": "pages.snippets_layouts",
+   "family": "presentation_navigation",
+   "capability": "Layouts, snippets and building blocks",
+   "studio_pro": "Layout and snippet editors",
+   "mxrb": [
+    "DSL layout, snippet, building_block_document"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "pages.navigation",
+   "family": "presentation_navigation",
+   "capability": "Navigation profiles and menus",
+   "studio_pro": "Navigation editor, menu documents",
+   "mxrb": [
+    "DSL menu, home_for, bottom_bar_item"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "pages.design",
+   "family": "presentation_navigation",
+   "capability": "Theme, design properties and Atlas",
+   "studio_pro": "Design properties, theme settings",
+   "mxrb": [
+    "mxrb design init / scan / migrate",
+    "DSL theme, widget_design"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "integration.rest",
+   "family": "mappings_services",
+   "capability": "Consumed and published REST services",
+   "studio_pro": "REST documents",
+   "mxrb": [
+    "DSL published_rest_service, rest_operation",
+    "consumed REST in flow DSL"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "integration.odata",
+   "family": "mappings_services",
+   "capability": "OData services",
+   "studio_pro": "Published/consumed OData documents",
+   "mxrb": [
+    "DSL published_odata_service, consumed_odata_service"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "integration.mappings",
+   "family": "mappings_services",
+   "capability": "JSON/XML structures, import and export mappings",
+   "studio_pro": "Mapping editors",
+   "mxrb": [
+    "DSL json_structure, import_mapping, export_mapping, xml_schema"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "integration.web_services",
+   "family": "mappings_services",
+   "capability": "Web services (SOAP) and app services",
+   "studio_pro": "Web service documents",
+   "mxrb": [
+    "DSL imported_web_service, published_web_service, consumed_app_service"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "integration.database_connector",
+   "family": "mappings_services",
+   "capability": "External database connections",
+   "studio_pro": "Database connector documents",
+   "mxrb": [
+    "DSL database_connection, query"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "workflows.edit",
+   "family": "workflows",
+   "capability": "Workflows and user tasks",
+   "studio_pro": "Workflow editor",
+   "mxrb": [
+    "DSL workflow, workflow_user_task and related builders"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "security.app",
+   "family": "security",
+   "capability": "App security, user roles, module roles and demo users",
+   "studio_pro": "App security dialog",
+   "mxrb": [
+    "DSL security_level, user_role, module_role, demo_user, password_policy"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "security.access_rules",
+   "family": "security",
+   "capability": "Entity access rules and page/flow access",
+   "studio_pro": "Entity access tab, document access",
+   "mxrb": [
+    "DSL access_rule, allow"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "settings.project",
+   "family": "project_settings",
+   "capability": "App settings, configurations and runtime settings",
+   "studio_pro": "App Settings dialog",
+   "mxrb": [
+    "DSL project_settings"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "settings.constants_events",
+   "family": "project_settings",
+   "capability": "Constants and scheduled events",
+   "studio_pro": "Constant and scheduled event documents",
+   "mxrb": [
+    "DSL constant, scheduled_event",
+    "Mxrb::Studio::Documents scalar patch (documents/patch)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": [
+    "Scalar patch is not typed structural editing"
+   ]
+  },
+  {
+   "id": "settings.languages",
+   "family": "project_settings",
+   "capability": "Languages, translations and system texts",
+   "studio_pro": "Language settings, system texts editor",
+   "mxrb": [
+    "DSL system texts, translations"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "assets.enumerations_images",
+   "family": "assets_code_actions",
+   "capability": "Enumerations, images and icon collections",
+   "studio_pro": "Enumeration and image collection documents",
+   "mxrb": [
+    "DSL enumeration, image_collection, custom_icon_collection"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "assets.code_actions",
+   "family": "assets_code_actions",
+   "capability": "Java and JavaScript actions",
+   "studio_pro": "Java/JavaScript action documents",
+   "mxrb": [
+    "DSL java_action, javascript_action",
+    "mxrb java-actions"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "source_present_coverage_unassessed",
+    "ide": "original_backend",
+    "typed_editing": "not_assessed",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "validation.consistency",
+   "family": "validation_refactoring",
+   "capability": "Consistency checks (Errors pane)",
+   "studio_pro": "Errors pane, Check now",
+   "mxrb": [
+    "mxrb validate, mxrb lint (MXRB Tasks)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "MXRB diagnostics are not shown in the Errors pane"
+   ]
+  },
+  {
+   "id": "validation.find",
+   "family": "validation_refactoring",
+   "capability": "Find, find advanced and find usages",
+   "studio_pro": "Find dialogs, Find Results pane",
+   "mxrb": [
+    "mxrb find, refs, callers, callees (MXRB Tasks)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "validation.refactor",
+   "family": "validation_refactoring",
+   "capability": "Rename, move and delete with reference updates",
+   "studio_pro": "App Explorer rename/move/delete",
+   "mxrb": [
+    "mxrb rename / move / remove --apply"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "partial",
+    "persistence": "not_assessed",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "Not wired to App Explorer actions"
+   ]
+  },
+  {
+   "id": "history.undo",
+   "family": "desktop_editor_services",
+   "capability": "Undo and redo of model changes",
+   "studio_pro": "Edit > Undo/Redo",
+   "mxrb": [
+    "Mxrb::Studio::History (model/history, model/undo, model/redo)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "implemented_tested_scope",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "implemented_tested_scope",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "partial"
+   },
+   "evidence": [
+    "spec/studio_history_spec.rb"
+   ],
+   "gaps": [
+    "Original undo stack still owns visual edits"
+   ]
+  },
+  {
+   "id": "runtime.run_locally",
+   "family": "compiler_runtime",
+   "capability": "Run locally and view app",
+   "studio_pro": "Run, View App, Console",
+   "mxrb": [
+    "mxrb run, serve, db up (MXRB Tasks)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "Run/Console use the original runtime launcher"
+   ]
+  },
+  {
+   "id": "runtime.deployment",
+   "family": "compiler_runtime",
+   "capability": "Create deployment package (MDA)",
+   "studio_pro": "App > Create Deployment Package",
+   "mxrb": [
+    "mxrb pack, portable (MXRB Tasks)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "runtime.database",
+   "family": "database_er_queries",
+   "capability": "Local database and data inspection",
+   "studio_pro": "Run locally with built-in database",
+   "mxrb": [
+    "Mxrb::Runtime::DatabaseWorkspace",
+    "Mxrb::Studio::DataConnections (data/connections)",
+    "DataExplorer#physical / #query / #explain"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "implemented_tested_scope",
+    "ruby_dsl": "not_applicable",
+    "ide": "accepted_integrated_studio",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "validated_scope",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "yes"
+   },
+   "evidence": [
+    "spec/studio_data_explorer_spec.rb",
+    "spec/studio_service_spec.rb"
+   ],
+   "gaps": [
+    "Physical schema needs a running MXRB workspace"
+   ]
+  },
+  {
+   "id": "vcs.git",
+   "family": "git_collaboration",
+   "capability": "Version control: commit, update, branches, history",
+   "studio_pro": "Version Control menu, Changes and History panes",
+   "mxrb": [
+    "mxrb team-server commands (MXRB Tasks)",
+    "Mxrb::Studio::Files#worktrees / add_worktree / remove_worktree"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "marketplace.modules",
+   "family": "marketplace_modules",
+   "capability": "Marketplace modules and widgets",
+   "studio_pro": "Marketplace pane, module import",
+   "mxrb": [
+    "mxrb marketplace search/pull/import/update (MXRB Tasks)"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "source_present_coverage_unassessed",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_validated",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": []
+  },
+  {
+   "id": "editor.ruby",
+   "family": "ruby_ide_debugging",
+   "capability": "Ruby code editing (not in Studio Pro)",
+   "studio_pro": "Not in Studio Pro",
+   "mxrb": [
+    "Mxrb::Studio::Files read/write with revisions, ruby/syntax"
+   ],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "implemented_tested_scope",
+    "ruby_dsl": "not_applicable",
+    "ide": "implemented_unaccepted",
+    "typed_editing": "not_applicable",
+    "persistence": "implemented_tested_scope",
+    "semantic_equivalence": "not_applicable",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "yes"
+   },
+   "evidence": [
+    "spec/studio_files_spec.rb"
+   ],
+   "gaps": [
+    "Navigation, formatting and debugger pending"
+   ]
+  },
+  {
+   "id": "extensions.maia",
+   "family": "extensions_docs_assistance",
+   "capability": "Maia assistance, extensions and documentation panes",
+   "studio_pro": "Maia, Extensions, Documentation",
+   "mxrb": [],
+   "states": {
+    "studio_pro": "present",
+    "ruby_api": "missing",
+    "ruby_dsl": "not_applicable",
+    "ide": "original_backend",
+    "typed_editing": "not_applicable",
+    "persistence": "not_applicable",
+    "semantic_equivalence": "not_validated",
+    "runtime_behavior": "not_applicable",
+    "independent_of_studio_backend": "no"
+   },
+   "evidence": [],
+   "gaps": [
+    "No MXRB API"
+   ]
+  }
+ ]
+}

@@ -1,0 +1,42 @@
+{
+  "name": "mxrb-studio-explorer-operations",
+  "authentication": false,
+  "viewport": { "width": 960, "height": 720 },
+  "pages": [{
+    "name": "studio-explorer-operations",
+    "path": "/studio.html",
+    "steps": [
+      { "wait_for_selector": "[data-path='hello.rb']" },
+      { "click_selector": "[aria-label='Add folder…']" },
+      { "wait_for_selector": ".mx-dialog input" },
+      { "input_value": { "selector": ".mx-dialog input", "value": "models" } },
+      { "click_selector": ".mx-dialog .mx-primary" },
+      { "wait_for_selector": "[data-path='models'][aria-selected='true']" },
+      { "click_selector": "[aria-label='Add file…']" },
+      { "input_value": { "selector": ".mx-dialog input", "value": "order.rb" } },
+      { "click_selector": ".mx-dialog .mx-primary" },
+      { "wait_for_selector": "[data-path='models/order.rb'][aria-selected='true']" },
+      { "click_selector": "[aria-label='Rename… (F2)']" },
+      { "input_value": { "selector": ".mx-dialog input", "value": "invoice.rb" } },
+      { "click_selector": ".mx-dialog .mx-primary" },
+      { "wait_for_selector": "[data-path='models/invoice.rb'][aria-selected='true']" },
+      { "wait_for_absence": "[data-path='models/order.rb']" },
+      { "click_selector": "[data-path='models']" },
+      { "click_selector": "[data-path='models']" },
+      { "click_selector": "[aria-label='Rename… (F2)']" },
+      { "input_value": { "selector": ".mx-dialog input", "value": "billing" } },
+      { "click_selector": ".mx-dialog .mx-primary" },
+      { "wait_for_selector": "[data-path='billing/invoice.rb']" },
+      { "click_selector": "[data-path='billing']" },
+      { "click_selector": "[aria-label='Delete (Del)']" },
+      { "wait_for_text": "and everything in it? You cannot undo this." },
+      { "click_selector": ".mx-dialog-buttons button" },
+      { "wait_for_absence": "[data-path='billing']" },
+      { "wait_for_selector": "[data-path='hello.rb']" },
+      { "click_selector": ".mx-section-header" },
+      { "wait_for_text": "This Ruby project is not in a Git repository." },
+      { "wait_for_absence": "[role='alert']" }
+    ],
+    "selectors": [ ".studio-panels", ".file-tree", ".mx-toolbar" ]
+  }]
+}

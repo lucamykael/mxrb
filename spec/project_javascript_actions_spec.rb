@@ -137,7 +137,7 @@ RSpec.describe Mxrb::RubyApp::ProjectJavaScriptActions do
     end
   end
 
-  it 'fails the export when a nanoflow calls a React Native action without a verified web adapter' do
+  it 'registers a React Native action without a verified web adapter as unavailable in the web app' do
     Dir.mktmpdir do |root|
       vibrate = action_source('Vibrate', imports: 'import { Vibration } from "react-native";')
       write_action(root, 'app', 'Vibrate', vibrate)
@@ -148,9 +148,15 @@ RSpec.describe Mxrb::RubyApp::ProjectJavaScriptActions do
           nanoflow(:Run) { call_javascript 'App.Vibrate' }
         end
       end
-      expect { Mxrb::Exporter.new(project, File.join(root, 'ruby'), mode: :ruby).export! }.to raise_error(
-        Mxrb::SerializationError, 'JavaScript actions target React Native and have no web adapter: App.Vibrate'
-      )
+      target = File.join(root, 'ruby')
+      expect { Mxrb::Exporter.new(project, target, mode: :ruby).export! }.to output(
+        /run only in the native mobile app; the web app reports them unavailable: App\.Vibrate/
+      ).to_stderr
+      generated = File.read(File.join(target, 'frontend', 'src', 'generated', 'nanoflows.ts'))
+      expect(generated).to include('...nativeOnlyJavaScriptActions(["App.Vibrate"])')
+      expect(generated).not_to include('projectJavaScriptActions')
+      vendor = File.join(target, 'frontend', 'src', 'generated', 'bridge', 'vendor')
+      expect(Dir.glob(File.join(vendor, '**', 'Vibrate.js'))).to be_empty
     end
   end
 

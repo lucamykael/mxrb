@@ -22,8 +22,12 @@ module Mxrb
       METHODS = {
         'catalog/list' => :catalog_list, 'catalog/arguments' => :catalog_arguments,
         'tasks/prepare' => :tasks_prepare, 'tasks/run' => :tasks_run, 'tasks/input' => :tasks_input,
+        'tasks/configurations' => :tasks_configurations, 'tasks/saveConfiguration' => :tasks_save_configuration,
+        'tasks/deleteConfiguration' => :tasks_delete_configuration,
         'files/list' => :files_list, 'files/read' => :files_read, 'files/write' => :files_write,
-        'files/create' => :files_create, 'files/move' => :files_move, 'files/worktrees' => :files_worktrees,
+        'files/create' => :files_create, 'files/move' => :files_move, 'files/delete' => :files_delete,
+        'files/worktrees' => :files_worktrees, 'files/worktreeAdd' => :files_worktree_add,
+        'files/worktreeRemove' => :files_worktree_remove,
         'ruby/syntax' => :ruby_syntax, 'ruby/declarations' => :ruby_declarations,
         'snapshot/create' => :snapshot_create,
         'project/status' => :project_status, 'project/convert' => :project_convert, 'project/attach' => :project_attach,
@@ -33,10 +37,10 @@ module Mxrb
         'model/preview' => :model_preview, 'model/apply' => :model_apply, 'model/history' => :model_history,
         'model/undo' => :model_undo, 'model/redo' => :model_redo,
         'model/catalog' => :model_catalog, 'model/domainDiagram' => :model_domain_diagram,
-        'data/logical' => :data_logical, 'data/physical' => :data_physical,
-        'data/query' => :data_query, 'data/explain' => :data_explain,
+        'data/logical' => :data_logical, 'data/connections' => :data_connections, 'data/physical' => :data_physical,
+        'data/query' => :data_query, 'data/explain' => :data_explain, 'parity/matrix' => :parity_matrix,
         'sync/link' => :sync_link, 'sync/unlink' => :sync_unlink, 'sync/status' => :sync_status,
-        'sync/run' => :sync_run, 'sync/preview' => :sync_preview,
+        'sync/run' => :sync_run, 'sync/preview' => :sync_preview, 'sync/document' => :sync_document,
         'locks/acquire' => :locks_acquire, 'locks/release' => :locks_release, 'locks/status' => :locks_status
       }.freeze
 
@@ -154,6 +158,14 @@ module Mxrb
         [stdin, stdout, stderr].each { _1&.close unless _1&.closed? }
       end
 
+      def tasks_configurations(params, _context) = task_configurations(params).list
+
+      def tasks_save_configuration(params, _context)
+        task_configurations(params).save(params.fetch('configuration'))
+      end
+
+      def tasks_delete_configuration(params, _context) = task_configurations(params).delete(params.fetch('id'))
+
       def tasks_input(params, _context)
         record = @mutex.synchronize { @tasks[params.fetch('task')] }
         raise ArgumentError, 'task is not running' unless record
@@ -184,7 +196,18 @@ module Mxrb
         files(params).move(params.fetch('path'), destination: params.fetch('destination'))
       end
 
+      def files_delete(params, _context)
+        files(params).delete(params.fetch('path'), recursive: params.fetch('recursive', false) == true,
+                                                   revision: params['revision'])
+      end
+
       def files_worktrees(params, _context) = files(params).worktrees
+
+      def files_worktree_add(params, _context)
+        files(params).add_worktree(params.fetch('path'), branch: params.fetch('branch'), base: params['base'])
+      end
+
+      def files_worktree_remove(params, _context) = files(params).remove_worktree(params.fetch('path'))
 
       def ruby_syntax(params, _context)
         text = params.fetch('text')
@@ -208,11 +231,27 @@ module Mxrb
       def project_status(params, _context) = ruby_project(params).status
       def project_attach(params, _context) = ruby_project(params).attach(root: params.fetch('root'))
 
+      # With `link`, the new Ruby project also becomes the synchronization
+      # base of the source model at once, before either side is edited.
       def project_convert(params, context)
         project = ruby_project(params)
-        context.with_progress('Converting to Ruby') do
+        result = context.with_progress('Converting to Ruby') do
           Isolated.run(context) { project.convert(model: params['model']) }
         end
+        return result unless params.fetch('link', false) && result[:state] == 'ready'
+
+        result.merge(sync: link_conversion(project, result.fetch(:root), params, context))
+      end
+
+      # The conversion stands even when linking fails; the base can be linked later.
+      def link_conversion(project, root, params, context)
+        sync = Sync.new(project.source_model, ruby_root: root, state_root: state_root(params), context:,
+                                              isolation: sync_isolation)
+        sync.linked? ? sync.status : sync.link!
+      rescue Cancelled
+        raise
+      rescue StandardError, ScriptError => e
+        { linked: false, state: 'unlinked', error: e.message }
       end
 
       def documents_list(params, _context) = documents(params).list
@@ -261,9 +300,20 @@ module Mxrb
       # ── Data ─────────────────────────────────────────────────────────────
 
       def data_logical(params, _context) = explorer(params).logical
-      def data_physical(params, _context) = explorer(params).physical
-      def data_query(params, _context) = explorer(params).query(params.fetch('payload'))
-      def data_explain(params, _context) = explorer(params).explain(params.fetch('payload'))
+      def data_connections(params, _context) = connections(params).list
+
+      # Physical schema, queries and plans run only on the connection the
+      # client chose; each result names that connection.
+      def data_physical(params, _context) = connected(params, &:physical)
+      def data_query(params, _context) = connected(params) { _1.query(params.fetch('payload')) }
+      def data_explain(params, _context) = connected(params) { _1.explain(params.fetch('payload')) }
+
+      # ── Parity ───────────────────────────────────────────────────────────
+
+      def parity_matrix(_params, _context)
+        require_relative 'parity'
+        Parity.new(methods: methods_list).to_h
+      end
 
       # ── Sync ─────────────────────────────────────────────────────────────
 
@@ -271,9 +321,19 @@ module Mxrb
       def sync_unlink(params, context) = sync(params, context).unlink!
       def sync_status(params, context) = sync(params, context).status
 
+      # `lease` (from locks/acquire on the same model) runs the write under the
+      # lock the client already holds, e.g. while the IDE keeps its own saves
+      # out until it has reloaded the model.
       def sync_run(params, context)
-        sync(params, context).run(resolutions: params.fetch('resolutions', {}),
-                                  dry_run: params.fetch('dry_run', false))
+        with_lease(params) do
+          sync(params, context).run(resolutions: params.fetch('resolutions', {}),
+                                    dry_run: params.fetch('dry_run', false),
+                                    expected_revisions: params['expected_revisions'])
+        end
+      end
+
+      def sync_document(params, context)
+        sync(params, context).document_state(unit_id: params['unit_id'], path: params['path'])
       end
 
       def sync_preview(params, context)
@@ -386,9 +446,57 @@ module Mxrb
                                                 database_port: params.fetch('database_port', 55_432))
       end
 
+      def connections(params)
+        load_model_support
+        require_relative 'data_connections'
+        DataConnections.new(params.fetch('model'), database_port: params.fetch('database_port', 55_432),
+                                                   runtime_port: params.fetch('runtime_port', 18_080))
+      end
+
+      def connected(params)
+        workspace, connection = connections(params).resolve!(params.fetch('connection'))
+        explorer = DataExplorer.new(params.fetch('model'), workspace:, modules: params.fetch('modules', []))
+        yield(explorer).merge(connection:)
+      end
+
+      def task_configurations(params)
+        require_relative 'task_configurations'
+        TaskConfigurations.new(params.fetch('project'), state_root: state_root(params))
+      end
+
       def sync(params, context)
         load_model_support
-        Sync.new(params.fetch('model'), ruby_root: params.fetch('ruby_root'), state_root: state_root(params), context:)
+        Sync.new(params.fetch('model'), ruby_root: params.fetch('ruby_root'), state_root: state_root(params), context:,
+                                        isolation: sync_isolation)
+      end
+
+      # Ruby generation for synchronization runs in the sandbox; only the
+      # process that starts the backend can relax that (e.g. CI without user
+      # namespaces).
+      def sync_isolation = ENV.fetch('MXRB_STUDIO_SYNC_ISOLATION', 'sandbox').to_sym
+
+      def with_lease(params)
+        return yield if params['lease'].nil?
+
+        path = leased_path(params['lease'], params.fetch('model'))
+        held = (Thread.current[WriteLock::HELD] ||= [])
+        held << path
+        begin
+          yield
+        ensure
+          held.delete_at(held.rindex(path))
+        end
+      end
+
+      def leased_path(id, model)
+        lease = @mutex.synchronize { @leases[id] }
+        raise ArgumentError, 'unknown lease' unless lease
+        unless lease[:lock].path == WriteLock.path_for(File.realpath(model))
+          raise ArgumentError,
+                'the lease does not hold this model'
+        end
+
+        lease[:lock].path
       end
     end
   end

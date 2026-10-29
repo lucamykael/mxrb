@@ -10,10 +10,13 @@ RSpec.describe Mxrb::Studio::Service do
     Dir.mktmpdir('mxrb-studio-service-') do |directory|
       @directory = directory
       original = ENV.fetch('XDG_STATE_HOME', nil)
+      isolation = ENV.fetch('MXRB_STUDIO_SYNC_ISOLATION', nil)
       ENV['XDG_STATE_HOME'] = File.join(directory, 'xdg')
+      ENV['MXRB_STUDIO_SYNC_ISOLATION'] = 'process'
       example.run
     ensure
       ENV['XDG_STATE_HOME'] = original
+      ENV['MXRB_STUDIO_SYNC_ISOLATION'] = isolation
     end
   end
 
@@ -238,11 +241,15 @@ RSpec.describe Mxrb::Studio::Service do
     workspace = instance_double(Mxrb::Runtime::DatabaseWorkspace)
     allow(workspace).to receive(:query_rows).and_raise(Mxrb::ToolchainError, 'database is not running')
     allow(workspace).to receive(:explain).and_raise(Mxrb::ToolchainError, 'database is not running')
+    allow(workspace).to receive(:status).and_raise(Mxrb::ToolchainError, 'docker is unavailable')
     allow(Mxrb::Runtime::DatabaseWorkspace).to receive(:new).and_return(workspace)
     expect(call('data/logical', 'model' => model)[:entities].map { _1[:qualified_name] }).to eq(['Shop.Product'])
-    expect(call('data/physical', 'model' => model, 'database_port' => 1)).to include(status: 'unavailable')
-    expect(call('data/query', 'model' => model, 'payload' => { 'sql' => 'SELECT 1' })).to include(ok: false)
-    expect(call('data/explain', 'model' => model, 'payload' => { 'sql' => 'SELECT 1' })).to include(ok: false)
+    connection = call('data/connections', 'model' => model, 'database_port' => 1).first
+    expect(connection).to include(running: false, port: 1, error: include(code: 'connection_status_unavailable'))
+    chosen = { 'model' => model, 'database_port' => 1, 'connection' => { 'id' => connection[:id] } }
+    expect(call('data/physical', chosen)).to include(status: 'unavailable', connection: include(id: connection[:id]))
+    expect(call('data/query', chosen.merge('payload' => { 'sql' => 'SELECT 1' }))).to include(ok: false)
+    expect(call('data/explain', chosen.merge('payload' => { 'sql' => 'SELECT 1' }))).to include(ok: false)
   end
 
   it 'discovers, converts and attaches Ruby projects and links them for synchronization' do

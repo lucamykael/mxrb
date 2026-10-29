@@ -115,11 +115,11 @@ module Mxrb
         # collection. Keep the collection opaque unless every rule is editable.
         access_lines = [] unless access_lines.size == access_rules.size
         <<~RUBY
-            # frozen_string_literal: true
+          # frozen_string_literal: true
 
-            entity #{symbol(entity.name)} do
+          entity #{symbol(entity.name)} do
           #{(attrs + assocs + flags + access_lines).join("\n")}
-            end
+          end
         RUBY
       end
 

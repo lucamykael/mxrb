@@ -265,11 +265,11 @@ module Mxrb
         body.unshift('  excluded') if menu.excluded?
         body.unshift("  documentation #{ruby(menu.documentation)}") unless menu.documentation.empty?
         <<~RUBY
-            # frozen_string_literal: true
+          # frozen_string_literal: true
 
-            menu #{symbol(menu.name)} do
+          menu #{symbol(menu.name)} do
           #{body.join("\n")}
-            end
+          end
         RUBY
       end
 

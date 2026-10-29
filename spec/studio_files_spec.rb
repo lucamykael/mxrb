@@ -271,4 +271,35 @@ RSpec.describe Mxrb::Studio::Files do # rubocop:disable Metrics/BlockLength
     allow(Open3).to receive(:capture3).and_raise(Errno::ENOENT)
     expect(files.worktrees).to eq([])
   end
+
+  it 'refuses an existing worktree path, an option as base revision and reports Git output' do
+    success = instance_double(Process::Status, success?: true)
+    failure = instance_double(Process::Status, success?: false)
+    allow(Open3).to receive(:capture3) do |*arguments|
+      next ['', '', failure] if arguments.include?('show-ref')
+      next ["fatal: refused on stdout\n", '', failure] if arguments.include?('add')
+
+      ['', '', success]
+    end
+    expect { files.add_worktree(Dir.tmpdir, branch: 'feature') }
+      .to raise_error(Mxrb::Studio::Conflict, 'worktree path already exists')
+    expect { files.add_worktree('/tmp/mxrb-worktree', branch: 'feature', base: '-x') }
+      .to raise_error(ArgumentError, 'invalid base revision')
+    expect { files.add_worktree('/tmp/mxrb-worktree', branch: 'feature', base: 'main') }
+      .to raise_error(Mxrb::Studio::Conflict, 'fatal: refused on stdout')
+  end
+
+  it 'reports a missing Git executable when changing worktrees' do
+    allow(Open3).to receive(:capture3).and_raise(Errno::ENOENT)
+    expect { files.add_worktree('/tmp/mxrb-worktree', branch: 'feature') }
+      .to raise_error(ArgumentError, /not a Git repository/)
+    status = instance_double(Process::Status, success?: true)
+    allow(Open3).to receive(:capture3) do |*arguments|
+      raise Errno::ENOENT if arguments.include?('add')
+
+      ['', '', status]
+    end
+    expect { files.add_worktree('/tmp/mxrb-worktree', branch: 'feature') }
+      .to raise_error(ArgumentError, 'Git is not installed')
+  end
 end

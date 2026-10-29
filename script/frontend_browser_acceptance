@@ -68,10 +68,25 @@ module MxrbFrontendBrowserAcceptance
       @socket&.close
       terminate
       @stderr.close!
-      FileUtils.remove_entry_secure(@profile) if File.directory?(@profile)
+      remove_profile
     end
 
     private
+
+    # Chromium helpers that outlive the browser process can still write into
+    # the profile for a moment, so removal is retried briefly.
+    def remove_profile
+      attempts = 0
+      begin
+        FileUtils.remove_entry_secure(@profile) if File.directory?(@profile)
+      rescue Errno::ENOTEMPTY, Errno::EEXIST
+        attempts += 1
+        raise if attempts > 20
+
+        sleep 0.1
+        retry
+      end
+    end
 
     def wait_for_endpoint
       path = File.join(@profile, 'DevToolsActivePort')

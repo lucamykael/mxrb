@@ -40,7 +40,7 @@ module Mxrb
         rows = @workspace.query_rows(sql, params:)
         {
           ok: true, rows:, row_count: rows.size, elapsed_ms: elapsed_ms(started),
-          warnings:
+          warnings:, sql:
         }
       rescue ArgumentError, JSON::ParserError => e
         error_payload(e, started, 'invalid_request')

@@ -11,6 +11,7 @@ require_relative 'artifacts'
 require_relative 'files'
 require_relative 'history'
 require_relative 'isolated'
+require_relative 'preview_sandbox'
 require_relative 'request_context'
 require_relative 'snapshot'
 require_relative 'structure'
@@ -40,8 +41,16 @@ module Mxrb
     #
     # Ruby that does not parse or evaluate leaves the model untouched and
     # reports the error with its file and line.
+    #
+    # Writes are coordinated: the model and the Ruby project are compared by
+    # revision (compare-and-swap) under the write locks every cooperating
+    # writer takes, the Ruby is generated from a private copy taken when the
+    # run starts, and Ruby saved while a run is in progress stays pending
+    # instead of being folded into the new base. Ruby generation runs in the
+    # sandbox by default, so project code cannot touch the user's files.
     class Sync
       VERSION = 1
+      ISOLATIONS = %i[sandbox process].freeze
       SKIPPED_DIRECTORIES = (Files::HIDDEN_DIRECTORIES + %w[build deployment tmp]).freeze
       MANAGED = %r{\A\.mxrb/}
       RESOLUTIONS = %w[ruby mendix].freeze
@@ -57,19 +66,29 @@ module Mxrb
         'import_mapping' => 'ImportMappings$ImportMapping', 'export_mapping' => 'ExportMappings$ExportMapping'
       }.freeze
 
-      attr_reader :model_path, :ruby_root, :state_directory
+      attr_reader :model_path, :ruby_root, :state_directory, :isolation
 
-      def initialize(model_path, ruby_root:, state_root:, context: RequestContext.new)
+      def initialize(model_path, ruby_root:, state_root:, context: RequestContext.new, isolation: :sandbox)
         @model_path = File.realpath(model_path)
         @ruby_root = File.realpath(ruby_root)
         raise ArgumentError, 'Ruby project root must contain project.rb' unless File.file?(entrypoint)
+
+        @isolation = isolation.to_sym
+        raise ArgumentError, "isolation must be one of #{ISOLATIONS.join(', ')}" unless ISOLATIONS.include?(@isolation)
 
         @state_directory = File.join(File.expand_path(state_root), 'sync', Digest::SHA256.hexdigest(@model_path))
         @context = context
       end
 
       def entrypoint = File.join(ruby_root, 'project.rb')
-      def linked? = File.file?(link_path)
+
+      # Linked to this Ruby project: a model has at most one synchronization
+      # base, and linking another Ruby project replaces it.
+      def linked?
+        File.file?(link_path) && read_link['ruby_root'] == ruby_root
+      rescue JSON::ParserError
+        false
+      end
 
       # Records the current model and Ruby project as the synchronized base.
       # The Ruby must generate; only the MXRB-owned `.mxrb/` metadata of the
@@ -79,10 +98,13 @@ module Mxrb
           Dir.mktmpdir('mxrb-link-') do |scratch|
             export = File.join(scratch, 'export')
             generated = File.join(scratch, 'generated')
+            snapshot = File.join(scratch, 'ruby')
             export(model_path, export)
-            refresh_managed(export)
-            generate(generated)
-            write_link(build_base(base_ruby: export, generated: File.join(generated, File.basename(model_path))))
+            WriteLock.synchronize(ruby_root) { refresh_managed(export) }
+            copy_tree(ruby_root, snapshot)
+            generate(generated, root: snapshot)
+            write_link(build_base(base_ruby: export, generated: File.join(generated, File.basename(model_path)),
+                                  ruby_source: snapshot))
           end
           clear_conflicts
           status
@@ -103,58 +125,100 @@ module Mxrb
         ruby = ruby_changes(link)
         diagnostics = ruby.flat_map { _1[:diagnostics] }
         mendix = mendix_changes(link)
-        conflicts = read_conflicts
+        revisions = { 'model' => model_revision, 'ruby' => ruby_revision(ruby_root) }
+        conflicts = read_conflicts(revisions)
         state = if conflicts.any? then 'conflict'
-                elsif diagnostics.any? then 'conversion_error'
+                elsif diagnostics.any? { _1[:severity] == 'error' } then 'conversion_error'
                 elsif ruby.any? || mendix.any? then 'pending'
                 else 'synced'
                 end
-        { linked: true, state:, model: model_path, ruby_root:, synced_at: link['synced_at'],
-          ruby_changes: ruby, mendix_changes: mendix, conflicts:, diverged: link.fetch('diverged', []) }
+        { linked: true, state:, model: model_path, ruby_root:, synced_at: link['synced_at'], revisions:,
+          ruby_changes: ruby, mendix_changes: mendix, conflicts:, diverged: link.fetch('diverged', []),
+          documents: documents(link, ruby, mendix, conflicts) }
+      end
+
+      # The representation state of one artifact, by native unit id or by Ruby
+      # file path: synced, pending (either side changed), conversion_error (its
+      # Ruby does not parse) or conflict (both sides changed the same element).
+      def document_state(unit_id: nil, path: nil)
+        raise ArgumentError, 'document_state needs a unit_id or a path' unless unit_id || path
+
+        current = status
+        return current.slice(:linked, :state) unless current[:linked]
+
+        units = unit_id ? [unit_id.downcase] : declared_units(read_link, path)
+        matches = current[:documents].select { units.include?(_1[:unit_id]) || (path && _1[:files].include?(path)) }
+        file = path && current[:ruby_changes].find { _1[:path] == path }
+        conflicts = current[:conflicts].select do |conflict|
+          units.include?(conflict[:unit_id]) || (path && conflict[:path] == path)
+        end
+        diagnostics = (file ? file[:diagnostics] : []) + matches.flat_map { _1[:diagnostics] }
+        state = if conflicts.any? then 'conflict'
+                elsif diagnostics.any? { _1[:severity] == 'error' } then 'conversion_error'
+                elsif file || matches.any? { _1[:state] != 'synced' } then 'pending'
+                else 'synced'
+                end
+        { linked: true, state:, unit_ids: units, path:, ruby: file&.slice(:path, :action),
+          mendix: matches.filter_map { _1[:mendix] && _1.slice(:unit_id, :mendix) },
+          conflicts: conflicts.map { _1[:id] }, diagnostics: diagnostics.uniq, revisions: current[:revisions] }
       end
 
       # Synchronizes both directions. `resolutions` maps conflict ids to
       # `ruby` or `mendix`; `dry_run` reports without writing anything.
-      def run(resolutions: {}, dry_run: false)
+      # Synchronizes both directions. `resolutions` maps conflict ids to
+      # `ruby` or `mendix`; `dry_run` reports without writing anything.
+      # `expected_revisions` ({model, ruby}, as reported by a previous dry run
+      # or status) makes the run refuse to apply anything but the compared
+      # state.
+      def run(resolutions: {}, dry_run: false, expected_revisions: nil)
         raise ArgumentError, 'Ruby project is not linked; convert or link it first' unless linked?
 
         resolutions = normalize_resolutions(resolutions)
+        expected_revisions = normalize_revisions(expected_revisions)
         with_progress('Synchronizing Ruby and Mendix') do |progress|
           link = read_link
-          revision = model_revision
-          ruby = ruby_changes(link)
-          syntax = ruby.flat_map { _1[:diagnostics] }
-          raise RubySourceError.new(syntax.first[:message], locations: syntax) if syntax.any?
-
           Dir.mktmpdir('mxrb-sync-') do |scratch|
+            snapshot = File.join(scratch, 'ruby')
+            copy_tree(ruby_root, snapshot)
+            revision = model_revision
+            revisions = { 'model' => revision, 'ruby' => ruby_revision(snapshot) }
+            if expected_revisions && expected_revisions != revisions
+              raise Conflict, 'the model or the Ruby project changed since they were compared; compare again'
+            end
+
+            ruby = ruby_changes(link, snapshot)
+            syntax = ruby.flat_map { _1[:diagnostics] }.select { _1[:severity] == 'error' }
+            raise RubySourceError.new(syntax.first[:message], locations: syntax) if syntax.any?
+
             progress.update(detail: 'reading the Ruby and Mendix changes')
-            inputs = prepare(link, scratch, ruby: ruby.any?, mendix: mendix_changes(link).any?)
-            plan = plan(link, inputs)
-            text = merge_text(inputs, plan)
+            inputs = prepare(link, scratch, ruby: ruby.any?, mendix: mendix_changes(link).any?, root: snapshot)
+            plan = plan(link, inputs, root: snapshot)
+            text = merge_text(inputs, plan, root: snapshot)
             conflicts = plan[:conflicts] + text[:conflicts]
             unresolved = conflicts.reject { resolutions.key?(_1[:id]) }
             result = { dry_run:, ruby_units: plan[:ruby_units], mendix_units: plan[:mendix_units],
-                       files: text[:files].map { _1.slice(:path, :action) }, conflicts: }
+                       files: text[:files].map { _1.slice(:path, :action) }, conflicts:, revisions: }
             if unresolved.any? || dry_run
-              write_conflicts(unresolved) unless dry_run
+              write_conflicts(unresolved, revisions)
               next result.merge(applied: false, state: unresolved.any? ? 'conflict' : 'pending')
             end
 
             progress.update(detail: 'writing the model and Ruby files')
-            entry = write(plan, text, resolutions, revision)
+            entry = write(plan, text, resolutions, revision, snapshot)
             base_ruby = inputs[:theirs]
             if plan[:ruby_units].any?
               base_ruby = export(model_path, File.join(scratch, 'export-after'))
-              refresh_managed(base_ruby)
+              WriteLock.synchronize(ruby_root) { refresh_managed(base_ruby, roots: [ruby_root, snapshot]) }
             end
             base = build_base(
               base_ruby:,
               generated: text[:files].empty? ? inputs[:generated] || link['generated_model'] : nil,
-              previous: link
+              previous: link, ruby_source: snapshot
             )
             write_link(base)
             clear_conflicts
-            result.merge(applied: true, state: 'synced', history: entry)
+            result.merge(applied: true, state: 'synced', history: entry,
+                         revisions: { 'model' => model_revision, 'ruby' => ruby_revision(ruby_root) })
           end
         end
       end
@@ -170,25 +234,25 @@ module Mxrb
       # The base is a copy of the model and of the Ruby files. The Ruby export
       # of the model and the model generated from the Ruby are kept when they
       # are already known and otherwise produced when a later run needs them.
-      def build_base(base_ruby:, generated:, previous: {})
+      def build_base(base_ruby:, generated:, ruby_source:, previous: {})
         FileUtils.mkdir_p(state_directory, mode: 0o700)
         directory = Dir.mktmpdir('base-', state_directory)
-        base_record(directory, base_ruby, generated, previous)
+        base_record(directory, base_ruby, generated, previous, ruby_source)
       rescue StandardError
         FileUtils.rm_rf(directory)
         raise
       end
 
-      def base_record(directory, base_ruby, generated, previous)
+      def base_record(directory, base_ruby, generated, previous, ruby_source)
         model = Snapshot.new(model_path, destination_root: File.join(directory, 'model'), assets: false).create
         ruby = File.join(directory, 'ruby')
-        copy_tree(ruby_root, ruby)
+        copy_tree(ruby_source, ruby)
         export = File.join(directory, 'export')
         copy_tree(base_ruby, export) if base_ruby
         generated_copy = (copy_model(generated, File.join(directory, 'generated')) if generated)
         { 'version' => VERSION, 'model' => model_path, 'ruby_root' => ruby_root, 'directory' => directory,
           'base_model' => model.fetch(:model), 'base_files' => ruby, 'base_ruby' => (export if base_ruby),
-          'generated_model' => generated_copy, 'ruby_files' => digests(ruby_root),
+          'generated_model' => generated_copy, 'ruby_files' => digests(ruby),
           'diverged' => generated_copy ? diverged(model.fetch(:model), generated_copy) : previous.fetch('diverged', []),
           'synced_at' => Time.now.utc.iso8601 }.compact
       end
@@ -196,12 +260,12 @@ module Mxrb
       # Produces what the plan and merge need: the generation of the base and
       # of the current Ruby when Ruby changed, the export of the base and of
       # the current model when the model changed, all in parallel.
-      def prepare(link, scratch, ruby:, mendix:)
+      def prepare(link, scratch, ruby:, mendix:, root:)
         inputs = { generated_base: link['generated_model'], base_ruby: link['base_ruby'] }
         jobs = []
         if ruby
           inputs[:generated] = File.join(scratch, 'generated', File.basename(model_path))
-          jobs << -> { generate(File.dirname(inputs[:generated])) }
+          jobs << -> { generate(File.dirname(inputs[:generated]), root:) }
           unless inputs[:generated_base]
             inputs[:generated_base] = File.join(scratch, 'generated-base', File.basename(model_path))
             jobs << -> { generate(File.dirname(inputs[:generated_base]), root: link.fetch('base_files')) }
@@ -244,17 +308,19 @@ module Mxrb
 
       # `.mxrb/` holds MXRB-owned metadata (the native baseline and assets
       # manifest); it always mirrors the synchronized model.
-      def refresh_managed(export)
+      def refresh_managed(export, roots: [ruby_root])
         managed = ->(root) { each_file(root).select { _1.match?(MANAGED) } }
         incoming = managed.call(export)
-        (managed.call(ruby_root) - incoming).each { FileUtils.rm_f(File.join(ruby_root, _1)) }
-        incoming.each do |path|
-          source = File.join(export, path)
-          target = File.join(ruby_root, path)
-          next if File.file?(target) && FileUtils.identical?(source, target)
+        roots.each do |destination|
+          (managed.call(destination) - incoming).each { FileUtils.rm_f(File.join(destination, _1)) }
+          incoming.each do |path|
+            source = File.join(export, path)
+            target = File.join(destination, path)
+            next if File.file?(target) && FileUtils.identical?(source, target)
 
-          FileUtils.mkdir_p(File.dirname(target))
-          FileUtils.cp(source, target)
+            FileUtils.mkdir_p(File.dirname(target))
+            FileUtils.cp(source, target)
+          end
         end
         true
       end
@@ -282,15 +348,72 @@ module Mxrb
 
       # ── Ruby side ───────────────────────────────────────────────────────
 
+      # Generates the model of the Ruby project at `root` into `directory`.
+      # Error locations name the files of the linked Ruby project, whichever
+      # copy was evaluated.
       def generate(directory, root: ruby_root)
         FileUtils.mkdir_p(directory)
         target = File.join(directory, File.basename(model_path))
+        isolation == :sandbox ? generate_sandboxed(target, root) : generate_in_process(target, root)
+      rescue RubySourceError, Protocol::Failure => e
+        raise relocate(e, root)
+      end
+
+      def generate_in_process(target, root)
         entry = File.join(root, 'project.rb')
         Isolated.run(@context, roots: [root]) { evaluate_project(entry, target, root) }
       end
 
+      # The Ruby runs in a mount/PID/network namespace that sees only a copy
+      # of the project; without it the run fails instead of evaluating the
+      # code unconfined.
+      def generate_sandboxed(target, root)
+        workspace = Dir.mktmpdir('mxrb-sync-sandbox-')
+        copy_tree(root, File.join(workspace, 'ruby'))
+        generated = PreviewSandbox.new(context: @context, model_name: File.basename(model_path)).generate(workspace)
+        FileUtils.cp(generated, target)
+        # MPR v2 keeps unit contents in the sibling mprcontents directory.
+        contents = File.join(File.dirname(generated), 'mprcontents')
+        FileUtils.cp_r(contents, File.dirname(target)) if File.directory?(contents)
+        target
+      rescue PreviewIsolationUnavailable => e
+        raise Protocol::Failure.new(Protocol::TOOLCHAIN, e.message, { reason: 'isolation_unavailable' })
+      ensure
+        FileUtils.rm_rf(workspace) if workspace
+      end
+
+      def relocate(error, root)
+        prefix = "#{File.expand_path(root)}/"
+        moved = lambda do |locations|
+          Array(locations).map do |location|
+            file = location[:file].to_s
+            relative = file.start_with?(prefix) ? file.delete_prefix(prefix) : file
+            next location if relative.start_with?('/')
+
+            location.merge(file: File.join(ruby_root, relative), path: relative)
+          end
+        end
+        if error.is_a?(RubySourceError)
+          RubySourceError.new(error.message, locations: moved.call(error.locations)).tap do
+            _1.set_backtrace(error.backtrace)
+          end
+        else
+          data = error.data
+          data = data.merge(locations: moved.call(data[:locations])) if data.is_a?(Hash) && data[:locations]
+          Protocol::Failure.new(error.code, error.message, data).tap { _1.set_backtrace(error.backtrace) }
+        end
+      end
+
+      # The open model is exported from a snapshot with its assets, the same
+      # inputs a conversion uses: caches the IDE rewrites (theme-cache) never
+      # enter the Ruby project's asset manifest.
       def export(model, destination)
-        Isolated.run(@context) { export_model(model, destination) }
+        return Isolated.run(@context) { export_model(model, destination) } unless File.realpath(model) == model_path
+
+        Dir.mktmpdir('mxrb-sync-export-') do |scratch|
+          snapshot = Snapshot.new(model_path, destination_root: scratch).create.fetch(:model)
+          Isolated.run(@context) { export_model(snapshot, destination) }
+        end
       end
 
       # Runs in the isolated worker: evaluates project.rb into `target`. Any
@@ -315,9 +438,9 @@ module Mxrb
         destination
       end
 
-      def ruby_changes(link)
+      def ruby_changes(link, root = ruby_root)
         base = link.fetch('ruby_files')
-        current = digests(ruby_root)
+        current = digests(root)
         (base.keys | current.keys).sort.filter_map do |path|
           next if base[path] == current[path]
 
@@ -325,19 +448,26 @@ module Mxrb
                                     else
                                       current[path].nil? ? 'removed' : 'modified'
                                     end }
-          change.merge(artifact_details(path, current[path]))
+          change.merge(artifact_details(path, current[path], root))
         end
       end
 
-      def artifact_details(path, digest)
+      def artifact_details(path, digest, root)
         return { diagnostics: [], artifacts: [] } unless digest && path.end_with?('.rb')
 
-        text = File.read(File.join(ruby_root, path), encoding: Encoding::UTF_8)
+        text = File.read(File.join(root, path), encoding: Encoding::UTF_8)
         { diagnostics: Artifacts.diagnostics(text, file: path), artifacts: Artifacts.declarations(text, path:) }
       end
 
       def digests(root)
         each_file(root).to_h { |path| [path, Digest::SHA256.file(File.join(root, path)).hexdigest] }
+      end
+
+      # One revision for the whole Ruby project: paths and contents.
+      def ruby_revision(root)
+        digest = Digest::SHA256.new
+        digests(root).sort.each { |path, value| digest.update(path).update("\0").update(value).update("\n") }
+        digest.hexdigest
       end
 
       def each_file(root, relative = nil, &block)
@@ -410,14 +540,14 @@ module Mxrb
 
       # ── Plan ────────────────────────────────────────────────────────────
 
-      def plan(link, inputs)
+      def plan(link, inputs, root:)
         base = units_of(link.fetch('base_model'))
         working = units_of(model_path)
         mendix = changed_units(base, working).to_h { [_1[0], _1[1]] }
         before = inputs[:generated] ? units_of(inputs.fetch(:generated_base)) : {}
         after = inputs[:generated] ? units_of(inputs[:generated]) : {}
         ruby = changed_units(before, after)
-        removed = inputs[:generated] ? removed_documents(link, base) - ruby.map(&:first) : []
+        removed = inputs[:generated] ? removed_documents(link, base, root) - ruby.map(&:first) : []
         ruby += removed.map { [_1, 'removed', nil] }
         plan = { units: [], conflicts: [], mendix_units: mendix.keys,
                  ruby_units: ruby.map(&:first) }
@@ -433,7 +563,7 @@ module Mxrb
 
       # Documents whose Ruby declaration was deleted. The native baseline
       # would restore them on generation, so their removal is explicit.
-      def removed_documents(link, base)
+      def removed_documents(link, base, root)
         declared = lambda do |root, paths|
           paths.flat_map do |path|
             file = File.join(root, path)
@@ -443,8 +573,8 @@ module Mxrb
                      .filter_map { [DOCUMENT_TYPES[_1[:kind]], _1[:qualified_name]] if DOCUMENT_TYPES.key?(_1[:kind]) }
           end
         end
-        changed = ruby_changes(link).map { _1[:path] }
-        gone = declared.call(link.fetch('base_files'), changed) - declared.call(ruby_root, changed)
+        changed = ruby_changes(link, root).map { _1[:path] }
+        gone = declared.call(link.fetch('base_files'), changed) - declared.call(root, changed)
         return [] if gone.empty?
 
         documents = document_index(base)
@@ -452,8 +582,7 @@ module Mxrb
       end
 
       # [document type, Module.Name] => unit id
-      def document_index(units)
-        documents = units.transform_values { IO::BsonCodec.parse(_1[:bytes]) }
+      def document_index(units, documents = units.transform_values { IO::BsonCodec.parse(_1[:bytes]) })
         modules = documents.select { _2['$Type'] == 'Projects$ModuleImpl' }.transform_values { _1['Name'] }
         documents.each_with_object({}) do |(id, document), index|
           container = units.dig(id, :container)
@@ -535,16 +664,16 @@ module Mxrb
 
       # ── Text merge ──────────────────────────────────────────────────────
 
-      def merge_text(inputs, plan)
+      def merge_text(inputs, plan, root:)
         return { files: [], conflicts: [] } if plan[:mendix_units].empty?
 
         theirs = inputs.fetch(:theirs)
         base = inputs.fetch(:base_ruby)
-        paths = (each_file(base).to_a | each_file(theirs).to_a | each_file(ruby_root).to_a).sort
+        paths = (each_file(base).to_a | each_file(theirs).to_a | each_file(root).to_a).sort
         files = []
         conflicts = []
         paths.each do |path|
-          merged = merge_file(path, File.join(ruby_root, path), File.join(base, path), File.join(theirs, path))
+          merged = merge_file(path, File.join(root, path), File.join(base, path), File.join(theirs, path))
           next unless merged
 
           files << merged
@@ -589,7 +718,10 @@ module Mxrb
 
       # ── Writing ─────────────────────────────────────────────────────────
 
-      def write(plan, text, resolutions, revision)
+      # Model lock, then Ruby project lock: the model must still be at the
+      # compared revision, and no Ruby file the merge rewrites may have been
+      # saved since the run took its copy. Nothing is written otherwise.
+      def write(plan, text, resolutions, revision, snapshot)
         entry = nil
         WriteLock.synchronize(model_path) do
           unless model_revision == revision
@@ -597,14 +729,26 @@ module Mxrb
                   'the model changed during synchronization; synchronize again'
           end
 
-          changes = plan[:units].select { applicable?(_1, resolutions) }
-          if changes.any?
-            _result, entry = History.new(model_path, state_root: File.dirname(File.dirname(state_directory)))
-                                    .record('Synchronize Ruby changes') { write_units(changes, resolutions) }
+          WriteLock.synchronize(ruby_root) do
+            check_files(text[:files], snapshot)
+            changes = plan[:units].select { applicable?(_1, resolutions) }
+            if changes.any?
+              _result, entry = History.new(model_path, state_root: File.dirname(File.dirname(state_directory)))
+                                      .record('Synchronize Ruby changes') { write_units(changes, resolutions) }
+            end
+            write_files(text[:files], resolutions, roots: [ruby_root, snapshot])
           end
         end
-        write_files(text[:files], resolutions)
         entry
+      end
+
+      def check_files(files, snapshot)
+        files.each do |file|
+          current = read_optional(File.join(ruby_root, file[:path]))
+          next if current == read_optional(File.join(snapshot, file[:path]))
+
+          raise Conflict, "#{file[:path]} was saved during synchronization; synchronize again"
+        end
       end
 
       def applicable?(change, resolutions)
@@ -651,7 +795,7 @@ module Mxrb
         level
       end
 
-      def write_files(files, resolutions)
+      def write_files(files, resolutions, roots:)
         return if files.empty?
 
         backup = File.join(state_directory, 'backups', Time.now.utc.strftime('%Y%m%dT%H%M%S%6N'))
@@ -662,13 +806,25 @@ module Mxrb
             FileUtils.cp(target, File.join(backup, file[:path]))
           end
           text = resolved_text(file, resolutions["file:#{file[:path]}"])
-          if file[:action] == 'delete' || text.nil?
-            FileUtils.rm_f(target)
-          else
-            FileUtils.mkdir_p(File.dirname(target))
-            File.binwrite(target, text)
-          end
+          roots.each { write_file(File.join(_1, file[:path]), file[:action] == 'delete' ? nil : text) }
         end
+      end
+
+      # Replaces a file atomically, so readers never see a partial merge.
+      def write_file(target, text)
+        return FileUtils.rm_f(target) if text.nil?
+
+        FileUtils.mkdir_p(File.dirname(target))
+        temporary = File.join(File.dirname(target), ".mxrb-sync-#{SecureRandom.hex(6)}.tmp")
+        File.open(temporary, File::WRONLY | File::CREAT | File::EXCL, 0o644) do |output|
+          output.write(text)
+          output.flush
+          output.fsync
+        end
+        File.chmod(File.stat(target).mode & 0o7777, temporary) if File.file?(target)
+        File.rename(temporary, target)
+      ensure
+        FileUtils.rm_f(temporary) if temporary && File.exist?(temporary)
       end
 
       def resolved_text(file, resolution)
@@ -676,6 +832,83 @@ module Mxrb
         return file[:ours] if file[:binary]
 
         TextMerge.merge(file[:base], file[:ours], file[:theirs], favor: resolution == 'ruby' ? :ours : :theirs).first
+      end
+
+      # ── Artifacts ───────────────────────────────────────────────────────
+
+      # Changed artifacts with what each side did: one entry per native unit
+      # (a document, or the domain model of a module for entities).
+      def documents(link, ruby, mendix, conflicts)
+        units = units_of(link.fetch('base_model'))
+        index = artifact_index(units)
+        names = index.invert
+        entries = Hash.new do |hash, id|
+          type, name = names[id] || [nil, nil]
+          hash[id] = { unit_id: id, type:, qualified_name: name, ruby: nil, mendix: nil, files: [],
+                       diagnostics: [], conflicts: [] }
+        end
+        ruby.each do |file|
+          file[:artifacts].filter_map { artifact_unit(index, _1) }.uniq.each do |id|
+            entries[id][:ruby] = file[:action]
+            entries[id][:files] << file[:path]
+            entries[id][:diagnostics].concat(file[:diagnostics])
+          end
+        end
+        mendix.each do |change|
+          entry = entries[change[:unit_id]]
+          entry[:mendix] = change[:action]
+          entry[:type] ||= change[:type]
+          entry[:qualified_name] ||= change[:name]
+        end
+        conflicts.each do |conflict|
+          ids = if conflict[:unit_id] then [conflict[:unit_id]]
+                else entries.values.select { _1[:files].include?(conflict[:path]) }.map { _1[:unit_id] }
+                end
+          ids.each { entries[_1][:conflicts] << conflict[:id] }
+        end
+        entries.values.map { _1.merge(state: document_state_of(_1)) }
+               .sort_by { [_1[:qualified_name].to_s, _1[:unit_id]] }
+      end
+
+      def document_state_of(entry)
+        if entry[:conflicts].any? then 'conflict'
+        elsif entry[:diagnostics].any? { _1[:severity] == 'error' } then 'conversion_error'
+        elsif entry[:ruby] || entry[:mendix] then 'pending'
+        else 'synced'
+        end
+      end
+
+      # Units a Ruby file declares, read from the file as it is now (or from
+      # the base when it was removed).
+      def declared_units(link, path)
+        file = [File.join(ruby_root, path), File.join(link.fetch('base_files'), path)].find { File.file?(_1) }
+        return [] unless file && path.end_with?('.rb')
+
+        index = artifact_index(units_of(link.fetch('base_model')))
+        Artifacts.declarations(File.read(file, encoding: Encoding::UTF_8), path:)
+                 .filter_map { artifact_unit(index, _1) }.uniq
+      end
+
+      def artifact_unit(index, artifact)
+        if %w[entity dto].include?(artifact[:kind])
+          index[['DomainModels$DomainModel', artifact[:qualified_name].split('.').first]]
+        elsif DOCUMENT_TYPES.key?(artifact[:kind])
+          index[[DOCUMENT_TYPES[artifact[:kind]], artifact[:qualified_name]]]
+        end
+      end
+
+      # document_index plus each module's domain model, keyed by module name.
+      def artifact_index(units)
+        documents = units.transform_values { IO::BsonCodec.parse(_1[:bytes]) }
+        index = document_index(units, documents)
+        modules = documents.select { _2['$Type'] == 'Projects$ModuleImpl' }.transform_values { _1['Name'] }
+        documents.each do |id, document|
+          container = units.dig(id, :container)
+          next unless document['$Type'] == 'DomainModels$DomainModel' && modules.key?(container)
+
+          index[['DomainModels$DomainModel', modules[container]]] = id
+        end
+        index
       end
 
       # ── Conflicts ───────────────────────────────────────────────────────
@@ -690,12 +923,34 @@ module Mxrb
         end
       end
 
-      def read_conflicts
-        File.file?(conflicts_path) ? JSON.parse(File.read(conflicts_path), symbolize_names: true) : []
+      def normalize_revisions(revisions)
+        return if revisions.nil?
+
+        valid = revisions.is_a?(Hash) && revisions.keys.map(&:to_s).sort == %w[model ruby] &&
+                revisions.values.all? { _1.is_a?(String) && _1.match?(/\A[0-9a-f]{64}\z/) }
+        raise ArgumentError, 'expected_revisions requires model and ruby SHA-256 strings' unless valid
+
+        revisions.transform_keys(&:to_s)
       end
 
-      def write_conflicts(conflicts)
-        File.write(conflicts_path, JSON.generate(conflicts))
+      # Conflicts of the last run; they describe the revisions they were found
+      # at and are dropped once either side changes again.
+      def read_conflicts(revisions)
+        return [] unless File.file?(conflicts_path)
+
+        stored = JSON.parse(File.read(conflicts_path), symbolize_names: true)
+        return [] unless stored.is_a?(Hash) && stored[:revisions]&.transform_keys(&:to_s) == revisions
+
+        stored.fetch(:conflicts, [])
+      rescue JSON::ParserError
+        []
+      end
+
+      def write_conflicts(conflicts, revisions)
+        FileUtils.mkdir_p(state_directory, mode: 0o700)
+        temporary = "#{conflicts_path}.#{SecureRandom.hex(6)}.tmp"
+        File.write(temporary, JSON.generate({ revisions:, conflicts: }))
+        File.rename(temporary, conflicts_path)
       end
 
       def clear_conflicts = FileUtils.rm_f(conflicts_path)

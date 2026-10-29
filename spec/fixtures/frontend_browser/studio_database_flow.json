@@ -1,0 +1,35 @@
+{
+  "name": "mxrb-studio-database",
+  "authentication": false,
+  "viewport": { "width": 960, "height": 720 },
+  "pages": [{
+    "name": "studio-database",
+    "path": "/studio.html",
+    "steps": [
+      { "click_text": "MXRB Database" },
+      { "wait_for_selector": ".db-panel #db-connection-select option[value^='mxrb-workspace:']" },
+      { "wait_for_text": "Choose a database connection." },
+      { "wait_for_absence": ".db-panel [aria-label='Physical schema']" },
+      { "wait_for_absence": ".db-panel [aria-label='Chosen connection']" },
+      { "wait_for_selector": ".db-panel button[aria-label^='Introspect'][disabled]" },
+      { "wait_for_text": "No connection chosen" },
+      { "select_option": { "selector": ".db-panel #db-connection-select", "option_index": 1 } },
+      { "wait_for_selector": ".db-panel [aria-label='Chosen connection']" },
+      { "wait_for_text": "Local Docker workspace (PostgreSQL 13)" },
+      { "wait_for_text": "as mxrb_reader" },
+      { "wait_for_text": "read-only" },
+      { "wait_for_text": "Not running" },
+      { "wait_for_text": "db up" },
+      { "wait_for_absence": ".db-panel [aria-label='Physical schema']" },
+      { "wait_for_absence": ".db-panel textarea" },
+      { "wait_for_selector": ".db-panel button[aria-label^='Introspect'][disabled]" },
+      { "wait_for_selector": ".db-panel button[aria-label^='Run query'][disabled]" },
+      { "select_option": { "selector": ".db-panel #db-connection-select", "option_index": 0 } },
+      { "wait_for_text": "No connection chosen" },
+      { "select_option": { "selector": ".db-panel #db-connection-select", "option_index": 1 } },
+      { "wait_for_text": "Not running" },
+      { "wait_for_absence": "[role='alert']" }
+    ],
+    "selectors": [ ".db-panel .mx-toolbar", ".db-connection", ".mx-status-bar" ]
+  }]
+}

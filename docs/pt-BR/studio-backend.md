@@ -46,14 +46,15 @@ compatível recebe o erro `-32015` com `data.supported`.
 
 | Grupo | Métodos |
 |---|---|
-| Catálogo e tarefas | `catalog/list`, `catalog/arguments`, `tasks/prepare`, `tasks/run`, `tasks/input` |
-| Arquivos | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/worktrees` |
+| Catálogo e tarefas | `catalog/list`, `catalog/arguments`, `tasks/prepare`, `tasks/run`, `tasks/input`, `tasks/configurations`, `tasks/saveConfiguration`, `tasks/deleteConfiguration` |
+| Arquivos | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/delete`, `files/worktrees`, `files/worktreeAdd`, `files/worktreeRemove` |
 | Ruby | `ruby/syntax`, `ruby/declarations` |
 | Projeto | `snapshot/create`, `project/status`, `project/convert`, `project/attach` |
 | Documentos | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Modelo | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
-| Dados | `data/logical`, `data/physical`, `data/query`, `data/explain` |
-| Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
+| Dados | `data/logical`, `data/connections`, `data/physical`, `data/query`, `data/explain` |
+| Paridade | `parity/matrix` |
+| Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/document`, `sync/run`, `sync/preview` |
 | Locks | `locks/acquire`, `locks/release`, `locks/status` |
 
 `catalog/list` devolve todos os comandos públicos da CLI e os scaffolds com um
@@ -104,6 +105,37 @@ ProjectConversion) não inventam uma representação Ruby.
 `files/write` e `documents/patch` recebem a revisão que o cliente leu por
 último e falham com conflito quando o arquivo ou a unit mudou nesse meio
 tempo, de modo que as duas versões são preservadas.
+
+## Operações dos painéis
+
+`tasks/configurations`, `tasks/saveConfiguration` e `tasks/deleteConfiguration`
+guardam configurações de tarefas nomeadas por caminho de `project` na raiz de
+estado. Uma configuração salva guarda um comando do catálogo, os valores dos
+campos e argumentos extras; marcadores como `{mpr}` não são resolvidos. Comandos,
+campos ou escolhas desconhecidos são rejeitados ao salvar, e os nomes são únicos
+por projeto.
+
+`files/delete` remove um arquivo, ou uma pasta com `recursive: true`; uma
+`revision` opcional ainda precisa coincidir. Metadados Git e a raiz do workspace
+não podem ser removidos. `files/worktreeAdd` adiciona uma worktree Git em um
+caminho absoluto fora da worktree atual, em um branch novo ou existente;
+`files/worktreeRemove` nunca força a remoção, então uma worktree com alterações
+locais é mantida. `project/attach` vincula o projeto nativo a outra worktree do
+mesmo projeto Ruby.
+
+`data/connections` lista as conexões de banco de um modelo com ambiente, host,
+porta, banco, usuário e estado. `data/physical`, `data/query` e `data/explain`
+exigem `connection: {id}` explícito e repetem a conexão em cada resultado; uma
+escolha ausente ou obsoleta falha com `connection_required` (-32020). Tabelas
+físicas e chaves estrangeiras vêm apenas do catálogo do PostgreSQL; o modelo
+lógico nunca as confirma. Resultados de consulta e de plano incluem o SQL
+executado, tornando visíveis as traduções de OQL.
+
+`parity/matrix` devolve a matriz de paridade nos dois sentidos: capacidades do
+Studio Pro com as APIs/DSL Ruby do MXRB, de um inventário revisado, e operações
+do MXRB com a superfície da IDE que as alcança, derivadas do catálogo de comandos
+e deste protocolo. Cada capacidade tem estados por dimensão; nada é agregado em
+um número de conclusão.
 
 ## Progresso, cancelamento e erros
 
@@ -239,6 +271,29 @@ núcleo por processo): vincular 23 s, Ruby para Mendix 21 s (dominado pela
 geração do projeto inteiro a partir do Ruby), Mendix para Ruby 5 s,
 `sync/status` 0,2 s.
 
+### Coordenação com uma IDE aberta
+
+- **Revisões.** `sync/status` e `sync/run` respondem `revisions: {model, ruby}`
+  (SHA-256 das units e dos arquivos Ruby). Enviadas de volta como
+  `expected_revisions`, a execução recusa (`conflict`) aplicar algo diferente
+  do estado comparado.
+- **Cópia do Ruby.** A geração usa uma cópia privada dos arquivos Ruby feita no
+  início. Ruby salvo durante a execução continua pendente e nunca entra na nova
+  base. Antes de gravar, sob o lock do modelo e depois o do projeto Ruby, cada
+  arquivo reescrito pela mescla precisa manter o texto copiado; senão nada é
+  gravado (`conflict`). Os arquivos mesclados são substituídos atomicamente.
+- **Leases.** Uma IDE que segura as próprias gravações até recarregar o modelo
+  usa `locks/acquire` e passa o `lease` para `sync/run`.
+- **Sandbox.** A geração roda no mesmo Bubblewrap de `sync/preview`; sem
+  isolamento a execução falha (`toolchain`/`isolation_unavailable`). Só quem
+  inicia o servidor pode relaxar com `MXRB_STUDIO_SYNC_ISOLATION=process`.
+- **Conflitos** encontrados (inclusive em dry run) ficam guardados com as
+  revisões; `sync/status` deixa de mostrá-los quando qualquer lado muda.
+- **Artefatos.** `sync/status` lista `documents` (por unit nativa: o que Ruby e
+  Mendix mudaram, arquivos, diagnósticos, conflitos e `state`); `sync/document`
+  responde o estado de um artefato por `unit_id` ou `path` Ruby.
+- **Conversão.** `project/convert` com `link: true` já vincula o novo projeto.
+
 ## Uso em requisição única
 
 `Mxrb::Studio::Backend#call` aceita um objeto de requisição com um nome de
@@ -247,21 +302,23 @@ mesmos métodos, para clientes que iniciam um processo por requisição.
 
 ## Painéis do Studio Pro
 
-Os painéis iniciais Ruby App Explorer e MXRB Tasks estão em
-`frontend/modeler/src/studio`, com entrada `studio.html`. Compile usando
-`npm run build:studio` em `frontend/modeler`; Node é dependência somente de build.
-Os outros bundles do modeler são preservados por uma configuração Vite separada.
+A entrada adicional `frontend/modeler/studio.html` fornece, em React, os painéis
+Ruby App Explorer, MXRB Tasks, ER global, Banco de dados e Paridade. Compile com
+`npm run build:studio` em `frontend/modeler`; a entrada compilada e os recursos
+locais são distribuídos na gem. Node é dependência somente de build, e essa
+configuração Vite separada preserva os outros bundles do modeler.
 
-O transporte é `chrome.webview`: o host desktop mantém o processo Ruby e fornece
-`host/context`/`host/contextChanged` com `root`, `source_model`, `ruby_root` opcional
-e variáveis CSS de tema `--studio-*`. Essas mensagens pertencem ao host, não ao
-serviço Ruby. O Explorer oferece descoberta/conversão de vínculo, leitura de pastas
-sob demanda, linhas virtualizadas e prévia explicitamente somente leitura. Tarefas
-usam o catálogo e os argumentos reais, saída e cancelamento. Registro no dock,
-criação/renomeação/worktrees na interface, tarefas salvas, editor Ruby nativo e
-resolução de conflitos continuam pendentes. Os cenários
-`spec/fixtures/frontend_browser/studio_panels*_flow.json` validam o escopo inicial
-com arquivos sintéticos e não certificam paridade completa da IDE.
+Os painéis falam o protocolo acima por `chrome.webview.postMessage` e pelo evento
+`message`. O host desktop mantém o processo Ruby, negocia o protocolo 2 e mapeia
+os IDs de requisição da página para a conexão compartilhada. Ele também atende
+`host/context` e `host/contextChanged`: `root` do projeto, `source_model`,
+`ruby_root` opcional e variáveis CSS de tema `--studio-*`. Essas duas mensagens
+pertencem ao adaptador desktop, não a `Mxrb::Studio::Service`. Os painéis não
+podem encerrar o processo compartilhado. Quando o contexto anuncia
+`capabilities.native_dialogs`, os painéis pedem ao host os diálogos de
+renomeação e aviso com `host/dialog`
+(`{kind: "input"|"confirm", title, message, label, value, buttons}` →
+`{button, value}`); sem essa capacidade, mostram um diálogo equivalente na página.
 
 Antes de cada tarefa, o painel consulta `project/status` quando o host não fornece
 `ruby_root`. Assim, uma conversão ou vínculo feito em outro dock define a pasta de
@@ -269,9 +326,27 @@ execução e a substituição `{ruby}` imediatamente. `{root}` acompanha essa pa
 `{mpr}` continua apontando para o modelo nativo. Sem vínculo, comandos nativos ou
 globais podem usar a pasta de origem; comandos do contexto Ruby pedem conversão ou
 vínculo primeiro. Trocar de projeto ou pressionar Stop cancela também a consulta
-pendente. Os testes estão em `npm run test:studio`, em `frontend/modeler`, e no
-cenário `studio_tasks_linked_flow.json`, que executa `project inspect` num projeto
-sintético vinculado com módulo `Shop`, recebendo do host somente o contexto nativo.
+pendente.
+
+`npm run test:studio`, em `frontend/modeler`, cobre as regressões de pasta de
+trabalho e cancelamento. O cenário `studio_tasks_linked_flow.json` testa só o
+painel Tasks: o host fornece `panel: "tasks"`, `root` e `source_model` (sem
+`ruby_root`) para um modelo sintético cujo projeto Ruby vinculado contém o módulo
+`Shop`, executa o comando real `project inspect` e confere a saída do projeto
+convertido.
+
+O Explorer oferece descoberta/conversão de vínculo, leitura de pastas sob demanda,
+linhas virtualizadas, criação de arquivo/pasta, renomeação e exclusão pelos
+diálogos do Studio Pro fornecidos pelo host (`host/dialog`) e worktrees Git. Tasks
+agrupa o catálogo real como a janela Maven do IntelliJ, guarda tarefas por projeto
+e mostra a saída com Stop, Clear e Scroll lock. O ER global mostra o modelo lógico
+de todos os módulos num só canvas; o painel Banco de dados mostra esquema físico,
+resultados SQL/OQL e planos apenas para uma conexão escolhida explicitamente; o
+painel Paridade mostra `parity/matrix`. Os cenários de navegador em
+`spec/fixtures/frontend_browser/studio_*_flow.json` exercitam os painéis com
+arquivos sintéticos, um app público de exemplo e, em
+`studio_database_live_flow.json`, um workspace de banco do MXRB em execução; eles
+não certificam paridade completa da IDE.
 
 O host pode publicar `project_revision` numérico em `host/contextChanged` quando
 uma conversão ou mudança de vínculo mantém o mesmo `source_model`. O Explorer
