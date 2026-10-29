@@ -36,6 +36,7 @@ module Mxrb
       CONFLICT = -32_010
       BUSY = -32_011
       VALIDATION = -32_012
+      CONNECTION_REQUIRED = -32_020
       TOOLCHAIN = -32_013
       RUBY_SOURCE = -32_014
       UNSUPPORTED_PROTOCOL = -32_015
@@ -46,7 +47,7 @@ module Mxrb
         INTERNAL_ERROR => 'internal_error', NOT_INITIALIZED => 'not_initialized',
         REQUEST_CANCELLED => 'cancelled', CONFLICT => 'conflict', BUSY => 'busy',
         VALIDATION => 'validation', TOOLCHAIN => 'toolchain', RUBY_SOURCE => 'ruby_source',
-        UNSUPPORTED_PROTOCOL => 'unsupported_protocol'
+        UNSUPPORTED_PROTOCOL => 'unsupported_protocol', CONNECTION_REQUIRED => 'connection_required'
       }.freeze
 
       # A request failure that already knows its protocol code.

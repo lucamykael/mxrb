@@ -15,7 +15,7 @@ button { border: 1px solid var(--studio-border); background: var(--studio-panel)
 button:disabled { opacity: .55; cursor: default; }
 button:focus-visible, input:focus-visible, select:focus-visible, pre:focus-visible { outline: 1px solid var(--studio-accent); outline-offset: -1px; }
 input, select { border: 1px solid var(--studio-border); background: var(--studio-background, #fff); padding: 4px; min-width: 0; }
-nav { display: flex; border-bottom: 1px solid var(--studio-border); background: var(--studio-panel); }
+nav { display: flex; flex-wrap: wrap; border-bottom: 1px solid var(--studio-border); background: var(--studio-panel); }
 nav button { border: 0; border-bottom: 2px solid transparent; white-space: normal; }
 nav button[aria-pressed=true] { border-bottom-color: var(--studio-accent); background: var(--studio-background, #fff); }
 .tool-heading { display: flex; flex-wrap: wrap; gap: 8px; justify-content: space-between; font-weight: 600; padding: 5px 8px; background: var(--studio-panel); border-bottom: 1px solid var(--studio-border); overflow-wrap: anywhere; }

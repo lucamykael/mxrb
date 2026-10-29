@@ -22,8 +22,12 @@ module Mxrb
       METHODS = {
         'catalog/list' => :catalog_list, 'catalog/arguments' => :catalog_arguments,
         'tasks/prepare' => :tasks_prepare, 'tasks/run' => :tasks_run, 'tasks/input' => :tasks_input,
+        'tasks/configurations' => :tasks_configurations, 'tasks/saveConfiguration' => :tasks_save_configuration,
+        'tasks/deleteConfiguration' => :tasks_delete_configuration,
         'files/list' => :files_list, 'files/read' => :files_read, 'files/write' => :files_write,
-        'files/create' => :files_create, 'files/move' => :files_move, 'files/worktrees' => :files_worktrees,
+        'files/create' => :files_create, 'files/move' => :files_move, 'files/delete' => :files_delete,
+        'files/worktrees' => :files_worktrees, 'files/worktreeAdd' => :files_worktree_add,
+        'files/worktreeRemove' => :files_worktree_remove,
         'ruby/syntax' => :ruby_syntax, 'ruby/declarations' => :ruby_declarations,
         'snapshot/create' => :snapshot_create,
         'project/status' => :project_status, 'project/convert' => :project_convert, 'project/attach' => :project_attach,
@@ -33,8 +37,8 @@ module Mxrb
         'model/preview' => :model_preview, 'model/apply' => :model_apply, 'model/history' => :model_history,
         'model/undo' => :model_undo, 'model/redo' => :model_redo,
         'model/catalog' => :model_catalog, 'model/domainDiagram' => :model_domain_diagram,
-        'data/logical' => :data_logical, 'data/physical' => :data_physical,
-        'data/query' => :data_query, 'data/explain' => :data_explain,
+        'data/logical' => :data_logical, 'data/connections' => :data_connections, 'data/physical' => :data_physical,
+        'data/query' => :data_query, 'data/explain' => :data_explain, 'parity/matrix' => :parity_matrix,
         'sync/link' => :sync_link, 'sync/unlink' => :sync_unlink, 'sync/status' => :sync_status,
         'sync/run' => :sync_run, 'sync/preview' => :sync_preview,
         'locks/acquire' => :locks_acquire, 'locks/release' => :locks_release, 'locks/status' => :locks_status
@@ -154,6 +158,14 @@ module Mxrb
         [stdin, stdout, stderr].each { _1&.close unless _1&.closed? }
       end
 
+      def tasks_configurations(params, _context) = task_configurations(params).list
+
+      def tasks_save_configuration(params, _context)
+        task_configurations(params).save(params.fetch('configuration'))
+      end
+
+      def tasks_delete_configuration(params, _context) = task_configurations(params).delete(params.fetch('id'))
+
       def tasks_input(params, _context)
         record = @mutex.synchronize { @tasks[params.fetch('task')] }
         raise ArgumentError, 'task is not running' unless record
@@ -184,7 +196,18 @@ module Mxrb
         files(params).move(params.fetch('path'), destination: params.fetch('destination'))
       end
 
+      def files_delete(params, _context)
+        files(params).delete(params.fetch('path'), recursive: params.fetch('recursive', false) == true,
+                                                   revision: params['revision'])
+      end
+
       def files_worktrees(params, _context) = files(params).worktrees
+
+      def files_worktree_add(params, _context)
+        files(params).add_worktree(params.fetch('path'), branch: params.fetch('branch'), base: params['base'])
+      end
+
+      def files_worktree_remove(params, _context) = files(params).remove_worktree(params.fetch('path'))
 
       def ruby_syntax(params, _context)
         text = params.fetch('text')
@@ -261,9 +284,20 @@ module Mxrb
       # ── Data ─────────────────────────────────────────────────────────────
 
       def data_logical(params, _context) = explorer(params).logical
-      def data_physical(params, _context) = explorer(params).physical
-      def data_query(params, _context) = explorer(params).query(params.fetch('payload'))
-      def data_explain(params, _context) = explorer(params).explain(params.fetch('payload'))
+      def data_connections(params, _context) = connections(params).list
+
+      # Physical schema, queries and plans run only on the connection the
+      # client chose; each result names that connection.
+      def data_physical(params, _context) = connected(params, &:physical)
+      def data_query(params, _context) = connected(params) { _1.query(params.fetch('payload')) }
+      def data_explain(params, _context) = connected(params) { _1.explain(params.fetch('payload')) }
+
+      # ── Parity ───────────────────────────────────────────────────────────
+
+      def parity_matrix(_params, _context)
+        require_relative 'parity'
+        Parity.new(methods: methods_list).to_h
+      end
 
       # ── Sync ─────────────────────────────────────────────────────────────
 
@@ -384,6 +418,24 @@ module Mxrb
         load_model_support
         DataExplorer.new(params.fetch('model'), modules: params.fetch('modules', []),
                                                 database_port: params.fetch('database_port', 55_432))
+      end
+
+      def connections(params)
+        load_model_support
+        require_relative 'data_connections'
+        DataConnections.new(params.fetch('model'), database_port: params.fetch('database_port', 55_432),
+                                                   runtime_port: params.fetch('runtime_port', 18_080))
+      end
+
+      def connected(params)
+        workspace, connection = connections(params).resolve!(params.fetch('connection'))
+        explorer = DataExplorer.new(params.fetch('model'), workspace:, modules: params.fetch('modules', []))
+        yield(explorer).merge(connection:)
+      end
+
+      def task_configurations(params)
+        require_relative 'task_configurations'
+        TaskConfigurations.new(params.fetch('project'), state_root: state_root(params))
       end
 
       def sync(params, context)

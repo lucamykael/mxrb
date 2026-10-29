@@ -1,0 +1,113 @@
+{
+  "name": "mxrb-studio-database-live",
+  "authentication": false,
+  "viewport": {
+    "width": 1100,
+    "height": 760
+  },
+  "pages": [
+    {
+      "name": "studio-database-live",
+      "path": "/studio.html",
+      "steps": [
+        {
+          "click_text": "MXRB Database"
+        },
+        {
+          "wait_for_selector": ".db-panel #db-connection-select option[value^='mxrb-workspace:']"
+        },
+        {
+          "wait_for_absence": ".db-panel [aria-label='Physical schema']"
+        },
+        {
+          "select_option": {
+            "selector": ".db-panel #db-connection-select",
+            "option_index": 1
+          }
+        },
+        {
+          "wait_for_text": "Running"
+        },
+        {
+          "wait_for_text": "The physical schema is shown only after you introspect this connection."
+        },
+        {
+          "click_selector": ".db-panel button[aria-label^='Introspect']"
+        },
+        {
+          "wait_for_text": "confirmed by the PostgreSQL catalog"
+        },
+        {
+          "wait_for_selector": "[data-node='schema:public']"
+        },
+        {
+          "click_selector": "[data-node='schema:public'][aria-expanded='false']"
+        },
+        {
+          "wait_for_selector": "[data-node='table:\"public\".\"sudoku$game\"']"
+        },
+        {
+          "click_selector": "[data-node='table:\"public\".\"sudoku$game\"']"
+        },
+        {
+          "wait_for_selector": "[data-node='table:\"public\".\"sudoku$game\":column:id']"
+        },
+        {
+          "wait_for_text": "PK"
+        },
+        {
+          "input_value": {
+            "selector": ".db-panel textarea[aria-label='SQL query']",
+            "value": "SELECT count(*) AS cells FROM \"sudoku$cell\""
+          }
+        },
+        {
+          "click_selector": ".db-panel button[aria-label^='Run query']"
+        },
+        {
+          "wait_for_selector": "[aria-label='Query results']"
+        },
+        {
+          "wait_for_text": "Connection: MXRB database workspace \u00b7 Local Docker workspace (PostgreSQL 13)"
+        },
+        {
+          "click_selector": ".db-language button:nth-child(2)"
+        },
+        {
+          "input_value": {
+            "selector": ".db-panel textarea[aria-label='OQL query']",
+            "value": "SELECT g.Level AS Level, g.HintCount AS Hints FROM Sudoku.Game AS g"
+          }
+        },
+        {
+          "click_selector": ".db-panel button[aria-label^='Run query']"
+        },
+        {
+          "wait_for_selector": ".db-sql summary"
+        },
+        {
+          "wait_for_text": "Executed SQL"
+        },
+        {
+          "click_selector": ".db-panel button[aria-label^='Explain']"
+        },
+        {
+          "wait_for_selector": "[aria-label='Query plan']"
+        },
+        {
+          "wait_for_text": "Estimated plan"
+        },
+        {
+          "wait_for_absence": "[role='alert']"
+        }
+      ],
+      "selectors": [
+        ".db-panel .mx-toolbar",
+        ".db-connection",
+        ".db-schema",
+        ".db-result",
+        ".mx-status-bar"
+      ]
+    }
+  ]
+}

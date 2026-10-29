@@ -116,6 +116,33 @@ module Mxrb
         end
       end
 
+      # Deletes a file, or a folder when `recursive` is set (an empty folder
+      # otherwise). A file revision, when given, must still match: deleting a
+      # file that changed after the caller read it would discard those edits.
+      def delete(path, recursive: false, revision: nil) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+        with_lock do
+          with_parent(path) do |parent, name, target|
+            raise ArgumentError, 'Git metadata cannot be deleted from the explorer' if name == '.git'
+
+            entry = File.join(handle_path(parent), name)
+            stat = File.lstat(entry)
+            raise ArgumentError, 'symlink traversal is not supported' if stat.symlink?
+
+            if stat.directory?
+              recursive ? FileUtils.rm_r(entry, secure: true) : Dir.rmdir(entry)
+            else
+              check_revision(read_at(parent, name, target), revision) if revision
+              File.unlink(entry)
+            end
+            { path: relative(target), directory: stat.directory?, deleted: true }
+          rescue Errno::ENOTEMPTY, Errno::EEXIST
+            raise Conflict, 'folder is not empty'
+          rescue Errno::ENOENT
+            raise Conflict, 'the file no longer exists'
+          end
+        end
+      end
+
       def worktrees # rubocop:disable Metrics/AbcSize
         output, _errors, status = Open3.capture3('git', '-C', root, 'worktree', 'list', '--porcelain', '-z')
         return [] unless status.success?
@@ -131,7 +158,87 @@ module Mxrb
         []
       end
 
+      # Adds a Git worktree next to the workspace, on a new or existing branch.
+      # The destination must be absolute and outside the current worktree.
+      def add_worktree(destination, branch:, base: nil)
+        repository!
+        target = absolute_outside(destination)
+        branch = branch_name(branch)
+        arguments = if git_success?('show-ref', '--verify', '--quiet', "refs/heads/#{branch}")
+                      [target, branch]
+                    else
+                      ['-b', branch, target, *([revision_name(base)] if base)]
+                    end
+        git!('worktree', 'add', *arguments)
+        worktrees.find { File.expand_path(_1[:path]) == target } || { path: target, branch: "refs/heads/#{branch}" }
+      end
+
+      # Removes a linked worktree. Git refuses one with local changes; this
+      # API never forces removal, so uncommitted work is preserved.
+      def remove_worktree(destination)
+        repository!
+        target = File.expand_path(destination)
+        known = worktrees
+        entry = known.find { File.expand_path(_1[:path]) == target }
+        raise ArgumentError, 'not a worktree of this repository' unless entry
+        raise ArgumentError, 'the main worktree cannot be removed' if entry == known.first
+        raise ArgumentError, 'the open worktree cannot be removed' if entry[:current]
+
+        git!('worktree', 'remove', target)
+        { path: target, removed: true }
+      end
+
       private
+
+      def repository!
+        raise ArgumentError, 'the Ruby project is not a Git repository' unless git_success?('rev-parse', '--git-dir')
+      end
+
+      def absolute_outside(destination)
+        unless destination.is_a?(String) && destination.start_with?('/') && !destination.include?("\0")
+          raise ArgumentError, 'worktree path must be absolute'
+        end
+
+        target = File.expand_path(destination)
+        if target == root || target.start_with?(root.delete_suffix(File::SEPARATOR) + File::SEPARATOR)
+          raise ArgumentError, 'worktree path must be outside the current worktree'
+        end
+        raise Conflict, 'worktree path already exists' if File.exist?(target)
+
+        target
+      end
+
+      def branch_name(branch)
+        valid = branch.is_a?(String) && !branch.start_with?('-') &&
+                git_success?('check-ref-format', '--branch', branch)
+        raise ArgumentError, 'invalid branch name' unless valid
+
+        branch
+      end
+
+      def revision_name(base)
+        raise ArgumentError, 'invalid base revision' if !base.is_a?(String) || base.start_with?('-') || base.empty?
+
+        known = git_success?('rev-parse', '--verify', '--quiet', "#{base}^{commit}")
+        raise ArgumentError, "unknown base revision: #{base}" unless known
+
+        base
+      end
+
+      def git_success?(*arguments)
+        Open3.capture3('git', '-C', root, *arguments)[2].success?
+      rescue Errno::ENOENT
+        false
+      end
+
+      def git!(*arguments)
+        output, error, status = Open3.capture3('git', '-C', root, *arguments)
+        raise Conflict, (error.strip.empty? ? output : error).strip.lines.last.to_s.strip unless status.success?
+
+        output
+      rescue Errno::ENOENT
+        raise ArgumentError, 'Git is not installed'
+      end
 
       def validate_text(text)
         if text.is_a?(String) && [Encoding::UTF_8, Encoding::US_ASCII, Encoding::ASCII_8BIT].include?(text.encoding)

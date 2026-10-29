@@ -1,0 +1,94 @@
+/* Shared Studio Pro tool-window chrome for the MXRB panels: flat toolbars,
+   white menus and grids with grey headers, no VS Code styling. Colours come
+   from the host's ColorScheme through --studio-* variables. */
+:root { --mx-header: var(--studio-panel, #f2f2f3); --mx-line: var(--studio-border, #d9dbdd);
+  --mx-hover: color-mix(in srgb, var(--studio-text, #0a1325) 7%, transparent);
+  --mx-primary: var(--studio-accent, #146ff4); }
+.mx-icon { flex: none; display: block; }
+.mx-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 1px; min-height: 28px; padding: 2px 4px;
+  border-bottom: 1px solid var(--mx-line); background: var(--studio-background, #fff); }
+.mx-toolbar .mx-separator { width: 1px; align-self: stretch; margin: 4px 4px; background: var(--mx-line); }
+.mx-toolbar .mx-spacer { flex: 1; }
+.mx-tool { display: inline-flex; align-items: center; gap: 4px; height: 24px; min-width: 24px; padding: 0 4px;
+  border: 1px solid transparent; border-radius: 2px; background: transparent; color: inherit; white-space: nowrap; }
+.mx-tool:hover:not(:disabled), .mx-tool[aria-pressed=true] { background: var(--mx-hover); }
+.mx-tool[aria-pressed=true] { border-color: var(--mx-line); }
+.mx-tool-run .mx-icon { color: #3cb043; }
+.mx-tool-stop .mx-icon { color: #d9383a; }
+.mx-tool:disabled .mx-icon { color: inherit; }
+.mx-toolbar input[type=search], .mx-toolbar select { height: 24px; padding: 2px 6px; }
+.mx-menu { position: fixed; z-index: 30; min-width: 180px; max-width: calc(100vw - 4px); padding: 4px 0;
+  background: var(--studio-background, #fff); border: 1px solid var(--mx-line); box-shadow: 0 4px 12px rgb(0 0 0 / 18%); }
+.mx-menu button { display: flex; justify-content: space-between; gap: 24px; width: 100%; border: 0; padding: 4px 16px 4px 24px;
+  background: transparent; text-align: left; white-space: nowrap; }
+.mx-menu button:hover:not(:disabled), .mx-menu button:focus-visible { background: var(--mx-hover); outline: none; }
+.mx-menu kbd { font: inherit; color: var(--studio-muted, #666); }
+.mx-menu-separator { height: 1px; margin: 4px 0; background: var(--mx-line); }
+.mx-dialog-backdrop { position: fixed; inset: 0; z-index: 40; display: grid; place-items: center; background: rgb(0 0 0 / 20%); padding: 8px; }
+.mx-dialog { width: min(460px, 100%); background: var(--studio-background, #fff); border: 1px solid #2b2b2b;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 30%); }
+.mx-dialog-title { padding: 6px 10px; background: #1f1f1f; color: #fff; }
+.mx-dialog-body { padding: 10px 10px 8px; }
+.mx-dialog-body p { margin: 4px 0 12px; overflow-wrap: anywhere; }
+.mx-dialog-message { display: flex; gap: 12px; align-items: flex-start; }
+.mx-warning-sign { color: #e8742d; font-size: 18px; line-height: 1; }
+.mx-dialog-field { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 24px; align-items: center; }
+.mx-dialog-buttons { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.mx-dialog-buttons button { min-width: 75px; border-radius: 2px; background: #f0f0f0; border-color: #c8c8c8; }
+.mx-dialog-buttons .mx-primary { background: var(--mx-primary); border-color: var(--mx-primary); color: #fff; }
+.mx-grid { width: 100%; border-collapse: collapse; table-layout: auto; }
+.mx-grid th { position: sticky; top: 0; z-index: 1; background: var(--mx-header); font-weight: normal; text-align: left;
+  padding: 4px 8px; border-right: 1px solid var(--mx-line); border-bottom: 1px solid var(--mx-line); white-space: nowrap; }
+.mx-grid td { padding: 3px 8px; border-bottom: 1px solid color-mix(in srgb, var(--mx-line) 55%, transparent);
+  vertical-align: top; overflow-wrap: anywhere; }
+.mx-grid tr[aria-selected=true] td { background: var(--studio-selection, #cde8ff); }
+.mx-grid tbody tr:hover td { background: var(--mx-hover); }
+.mx-empty { margin: 12px 8px; color: var(--studio-muted, #666); overflow-wrap: anywhere; }
+.mx-badge { display: inline-block; padding: 0 5px; border-radius: 8px; border: 1px solid var(--mx-line);
+  font-size: 11px; line-height: 15px; white-space: nowrap; }
+.mx-state-good { background: #e3f5e5; border-color: #9fd3a6; color: #1d5e26; }
+.mx-state-partial { background: #fff4d6; border-color: #e8c66a; color: #6b4e00; }
+.mx-state-bad { background: #fde5e5; border-color: #eaa3a3; color: #8a1f1f; }
+.mx-state-neutral { background: var(--mx-header); color: var(--studio-muted, #666); }
+.mx-panel { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.mx-panel > .mx-fill { flex: 1; min-height: 0; overflow: auto; }
+.mx-status-bar { display: flex; flex-wrap: wrap; gap: 4px 12px; padding: 3px 8px; border-top: 1px solid var(--mx-line);
+  background: var(--mx-header); color: var(--studio-muted, #666); overflow-wrap: anywhere; }
+.mx-tree-row { display: flex; align-items: center; gap: 4px; min-height: 22px; padding: 1px 6px; cursor: default; white-space: nowrap; }
+.mx-tree-row:hover { background: var(--mx-hover); }
+.mx-tree-row[aria-selected=true] { background: var(--studio-selection, #cde8ff); }
+.mx-tree-row > span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.mx-twisty { width: 12px; flex: none; text-align: center; color: var(--studio-muted, #666); }
+.mx-muted { color: var(--studio-muted, #666); }
+.mx-spacer { flex: 1; }
+.mx-section-header { display: flex; align-items: center; gap: 4px; width: 100%; border: 0; border-top: 1px solid var(--mx-line);
+  padding: 4px 6px; background: var(--mx-header); text-align: left; font-weight: 600; }
+.mx-worktrees { flex-shrink: 0; }
+.mx-worktree-list { max-height: 30vh; overflow: auto; }
+.mx-worktree-list .mx-tree-row:focus-visible { outline: 1px solid var(--mx-primary); outline-offset: -1px; }
+/* MXRB Tasks: IntelliJ Maven-style tree beside arguments and a console. */
+.tasks-panel .tasks-content { flex: 1; min-height: 0; height: auto; }
+.tasks-panel .task-detail { display: flex; flex-direction: column; min-height: 0; }
+.tasks-panel .task-detail > form, .tasks-panel .task-detail > .hint { flex-shrink: 0; }
+.task-group > summary { list-style: none; display: flex; align-items: center; gap: 4px; padding: 3px 0; cursor: default; }
+.task-group > summary::-webkit-details-marker { display: none; }
+.task-group > summary::before { content: '▸'; width: 12px; text-align: center; color: var(--studio-muted, #666); }
+.task-group[open] > summary::before { content: '▾'; }
+.task-catalog .task-group > button { padding: 3px 8px 3px 34px; }
+.task-catalog .task-group > .mx-empty { margin: 2px 8px 6px 34px; }
+.task-saved > button { font-weight: 600; }
+.task-console { flex: 1; min-height: 140px; display: flex; flex-direction: column; border: 1px solid var(--mx-line); margin-top: 6px; }
+.task-console .mx-toolbar { border-bottom: 1px solid var(--mx-line); }
+.task-console .task-status { padding: 0 4px; font-weight: 600; min-height: 0; }
+.tasks-panel .task-output { flex: 1; min-height: 100px; border-top: 0; padding: 4px 6px; }
+.task-stderr { color: var(--studio-error, #bd2525); }
+.task-system { color: var(--studio-muted, #666); }
+/* MXRB Parity */
+.parity-grid .mx-grid td:first-child { min-width: 180px; }
+.parity-capability { font-weight: 600; }
+.parity-detail { flex-shrink: 0; max-height: 30vh; overflow: auto; padding: 6px 8px; border-top: 1px solid var(--mx-line); overflow-wrap: anywhere; }
+.parity-detail ul { margin: 4px 0; padding-left: 18px; }
+@media (max-width: 450px) { .parity-grid .mx-grid td:first-child { min-width: 120px; } }
+.mx-chevron { width: 12px; flex: none; display: inline-flex; color: var(--studio-muted, #666); }
+.tree-row .mx-icon { color: var(--studio-muted, #555); }
+.mx-icon[data-icon=ruby] { color: #c0392b; }

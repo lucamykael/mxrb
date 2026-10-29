@@ -46,13 +46,14 @@ compatível recebe o erro `-32015` com `data.supported`.
 
 | Grupo | Métodos |
 |---|---|
-| Catálogo e tarefas | `catalog/list`, `catalog/arguments`, `tasks/prepare`, `tasks/run`, `tasks/input` |
-| Arquivos | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/worktrees` |
+| Catálogo e tarefas | `catalog/list`, `catalog/arguments`, `tasks/prepare`, `tasks/run`, `tasks/input`, `tasks/configurations`, `tasks/saveConfiguration`, `tasks/deleteConfiguration` |
+| Arquivos | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/delete`, `files/worktrees`, `files/worktreeAdd`, `files/worktreeRemove` |
 | Ruby | `ruby/syntax`, `ruby/declarations` |
 | Projeto | `snapshot/create`, `project/status`, `project/convert`, `project/attach` |
 | Documentos | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Modelo | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
-| Dados | `data/logical`, `data/physical`, `data/query`, `data/explain` |
+| Dados | `data/logical`, `data/connections`, `data/physical`, `data/query`, `data/explain` |
+| Paridade | `parity/matrix` |
 | Sincronização | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
 | Locks | `locks/acquire`, `locks/release`, `locks/status` |
 
@@ -104,6 +105,37 @@ ProjectConversion) não inventam uma representação Ruby.
 `files/write` e `documents/patch` recebem a revisão que o cliente leu por
 último e falham com conflito quando o arquivo ou a unit mudou nesse meio
 tempo, de modo que as duas versões são preservadas.
+
+## Operações dos painéis
+
+`tasks/configurations`, `tasks/saveConfiguration` e `tasks/deleteConfiguration`
+guardam configurações de tarefas nomeadas por caminho de `project` na raiz de
+estado. Uma configuração salva guarda um comando do catálogo, os valores dos
+campos e argumentos extras; marcadores como `{mpr}` não são resolvidos. Comandos,
+campos ou escolhas desconhecidos são rejeitados ao salvar, e os nomes são únicos
+por projeto.
+
+`files/delete` remove um arquivo, ou uma pasta com `recursive: true`; uma
+`revision` opcional ainda precisa coincidir. Metadados Git e a raiz do workspace
+não podem ser removidos. `files/worktreeAdd` adiciona uma worktree Git em um
+caminho absoluto fora da worktree atual, em um branch novo ou existente;
+`files/worktreeRemove` nunca força a remoção, então uma worktree com alterações
+locais é mantida. `project/attach` vincula o projeto nativo a outra worktree do
+mesmo projeto Ruby.
+
+`data/connections` lista as conexões de banco de um modelo com ambiente, host,
+porta, banco, usuário e estado. `data/physical`, `data/query` e `data/explain`
+exigem `connection: {id}` explícito e repetem a conexão em cada resultado; uma
+escolha ausente ou obsoleta falha com `connection_required` (-32020). Tabelas
+físicas e chaves estrangeiras vêm apenas do catálogo do PostgreSQL; o modelo
+lógico nunca as confirma. Resultados de consulta e de plano incluem o SQL
+executado, tornando visíveis as traduções de OQL.
+
+`parity/matrix` devolve a matriz de paridade nos dois sentidos: capacidades do
+Studio Pro com as APIs/DSL Ruby do MXRB, de um inventário revisado, e operações
+do MXRB com a superfície da IDE que as alcança, derivadas do catálogo de comandos
+e deste protocolo. Cada capacidade tem estados por dimensão; nada é agregado em
+um número de conclusão.
 
 ## Progresso, cancelamento e erros
 

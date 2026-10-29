@@ -160,7 +160,7 @@ module Mxrb
         raise ArgumentError, 'analyze must be a boolean' unless [true, false].include?(analyze)
 
         report = workspace.explain(sql, params:, analyze:)
-        { ok: true, read_only: true, analyzed: analyze, warnings:, plan: json_safe(report.to_h) }
+        { ok: true, read_only: true, analyzed: analyze, warnings:, sql:, plan: json_safe(report.to_h) }
       rescue ArgumentError => e
         { ok: false, error: { code: 'invalid_request', message: e.message } }
       rescue StandardError => e

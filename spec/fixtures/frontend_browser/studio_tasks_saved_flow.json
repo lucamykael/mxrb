@@ -1,0 +1,34 @@
+{
+  "name": "mxrb-studio-tasks-saved",
+  "authentication": false,
+  "viewport": { "width": 960, "height": 720 },
+  "pages": [{
+    "name": "studio-tasks-saved",
+    "path": "/studio.html",
+    "steps": [
+      { "click_selector": "nav button:nth-child(2)" },
+      { "wait_for_selector": ".task-catalog details button[data-task='page templates']" },
+      { "click_selector": "[data-task='page templates']" },
+      { "click_selector": { "selector": "form .task-actions button", "index": 2 } },
+      { "wait_for_selector": ".mx-dialog input" },
+      { "input_value": { "selector": ".mx-dialog input", "value": "Templates JSON" } },
+      { "click_selector": ".mx-dialog .mx-primary" },
+      { "wait_for_selector": "[data-task='saved:Templates JSON'].selected" },
+      { "navigate": "/studio.html" },
+      { "click_selector": "nav button:nth-child(2)" },
+      { "wait_for_selector": "[data-task='saved:Templates JSON']" },
+      { "click_selector": "[data-task='saved:Templates JSON']" },
+      { "wait_for_text": "mxrb page templates" },
+      { "click_selector": "form button[type='submit']" },
+      { "wait_for_text": "Completed" },
+      { "wait_for_selector": ".task-output .task-stdout" },
+      { "click_selector": "[aria-label='Clear']" },
+      { "wait_for_absence": ".task-output span" },
+      { "click_selector": "[aria-label='Delete saved task']" },
+      { "click_selector": ".mx-dialog-buttons button" },
+      { "wait_for_absence": "[data-task='saved:Templates JSON']" },
+      { "wait_for_absence": "[role='alert']" }
+    ],
+    "selectors": [ ".studio-panels", ".task-catalog", ".task-console" ]
+  }]
+}

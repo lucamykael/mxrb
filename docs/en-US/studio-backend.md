@@ -42,13 +42,14 @@ receives error `-32015` with `data.supported`.
 
 | Group | Methods |
 |---|---|
-| Catalog and tasks | `catalog/list`, `catalog/arguments`, `tasks/prepare`, `tasks/run`, `tasks/input` |
-| Files | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/worktrees` |
+| Catalog and tasks | `catalog/list`, `catalog/arguments`, `tasks/prepare`, `tasks/run`, `tasks/input`, `tasks/configurations`, `tasks/saveConfiguration`, `tasks/deleteConfiguration` |
+| Files | `files/list`, `files/read`, `files/write`, `files/create`, `files/move`, `files/delete`, `files/worktrees`, `files/worktreeAdd`, `files/worktreeRemove` |
 | Ruby | `ruby/syntax`, `ruby/declarations` |
 | Project | `snapshot/create`, `project/status`, `project/convert`, `project/attach` |
 | Documents | `documents/list`, `documents/read`, `documents/patch`, `documents/ruby` |
 | Model | `model/capabilities`, `model/revision`, `model/preview`, `model/apply`, `model/history`, `model/undo`, `model/redo`, `model/catalog`, `model/domainDiagram` |
-| Data | `data/logical`, `data/physical`, `data/query`, `data/explain` |
+| Data | `data/logical`, `data/connections`, `data/physical`, `data/query`, `data/explain` |
+| Parity | `parity/matrix` |
 | Sync | `sync/link`, `sync/unlink`, `sync/status`, `sync/run`, `sync/preview` |
 | Locks | `locks/acquire`, `locks/release`, `locks/status` |
 
@@ -88,6 +89,35 @@ ModuleSettings, ProjectConversion) do not fabricate a Ruby source file.
 `files/write` and `documents/patch` take the revision the client last read
 and fail with a conflict when the file or unit changed in between, so both
 versions are kept.
+
+## Panel operations
+
+`tasks/configurations`, `tasks/saveConfiguration` and `tasks/deleteConfiguration`
+keep named task configurations per `project` path in the state root. A saved
+configuration stores a catalog command, its field values and extra arguments;
+placeholders such as `{mpr}` stay unresolved. Unknown commands, fields or choices
+are rejected when saving, and names are unique per project.
+
+`files/delete` removes a file, or a folder with `recursive: true`; an optional
+`revision` must still match. Git metadata and the workspace root cannot be
+deleted. `files/worktreeAdd` adds a Git worktree at an absolute path outside the
+current worktree, on a new or existing branch; `files/worktreeRemove` never forces
+removal, so a worktree with local changes is kept. `project/attach` links the
+native project to another worktree of the same Ruby project.
+
+`data/connections` lists the database connections of a model with their
+environment, host, port, database, user and running state. `data/physical`,
+`data/query` and `data/explain` require an explicit `connection: {id}` and echo
+the connection in every result; a missing or stale choice fails with
+`connection_required` (-32020). Physical tables and foreign keys come only from
+the PostgreSQL catalog; the logical model never confirms them. Query and explain
+results include the executed SQL, so OQL translations are visible.
+
+`parity/matrix` returns the parity matrix in both directions: Studio Pro
+capabilities with their MXRB Ruby APIs/DSL from a reviewed inventory, and MXRB
+operations with the IDE surface that reaches them, derived from the command
+catalog and this protocol. Each capability has per-dimension states; nothing is
+aggregated into a completion figure.
 
 ## Progress, cancellation and errors
 
@@ -223,8 +253,8 @@ methods, for clients that start one process per request.
 
 ## Studio Pro panels
 
-The additional `frontend/modeler/studio.html` entry provides the Ruby App Explorer
-and MXRB Tasks in React. Build it with `npm run build:studio` from
+The additional `frontend/modeler/studio.html` entry provides the Ruby App Explorer,
+MXRB Tasks, Global ER, Database and Parity panels in React. Build it with `npm run build:studio` from
 `frontend/modeler`; the compiled entry and local assets ship in the gem. Node is
 only a build dependency. This separate build preserves the existing modeler bundles.
 
@@ -234,7 +264,10 @@ maps page request IDs to its shared connection. It additionally handles
 `host/context` and `host/contextChanged`: project `root`, `source_model`, optional
 `ruby_root` and `theme` CSS variables named `--studio-*`. These two messages belong
 to the desktop adapter, not `Mxrb::Studio::Service`. Panels cannot shut down the
-shared process.
+shared process. When the context advertises `capabilities.native_dialogs`, panels
+ask the host for Rename/Warning dialogs with `host/dialog`
+(`{kind: "prompt"|"confirm", title, message, label, value, buttons}` →
+`{button, value}`); otherwise they show an equivalent in-page dialog.
 
 Before each task, the panel resolves `project/status` if the host did not supply
 `ruby_root`. A conversion or link made in another dock therefore supplies the
@@ -250,13 +283,17 @@ its host supplies `panel: "tasks"`, `root` and `source_model` (no `ruby_root`) f
 a synthetic model whose linked Ruby project contains module `Shop`. It runs the
 real `project inspect` command and checks the converted project output.
 
-The initial Explorer supports project link lookup/conversion, lazy folder reads,
-virtualized rows and an explicitly read-only file preview. Tasks use the real
-catalog's argument schemas, stream output and support cancellation. File creation,
-renaming/worktree controls, saved task configurations, the native Ruby editor,
-conflict resolution and full dock integration remain separate work. Browser
-scenarios under `spec/fixtures/frontend_browser/studio_panels*_flow.json` exercise
-the initial panels with synthetic files; they do not establish full IDE parity.
+The Explorer supports project link lookup/conversion, lazy folder reads,
+virtualized rows, add file/folder, rename and delete through Studio Pro dialogs
+supplied by the host (`host/dialog`), and Git worktrees. Tasks group the real
+catalog like IntelliJ's Maven window, keep saved tasks per project and show output
+with Stop, Clear and Scroll lock. The Global ER shows the logical model of all
+modules on one canvas; the Database panel shows physical schema, SQL/OQL results
+and plans only for an explicitly chosen connection; the Parity panel shows
+`parity/matrix`. Browser scenarios under
+`spec/fixtures/frontend_browser/studio_*_flow.json` exercise the panels with
+synthetic files, a public sample app and, for `studio_database_live_flow.json`,
+a running MXRB database workspace; they do not establish full IDE parity.
 
 The host can publish a numeric `project_revision` in `host/contextChanged` when a
 conversion or link change keeps the same `source_model`. The Explorer then queries

@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { StudioRpc } from './rpc';
 import type { Entry, ProjectStatus, StudioContext } from './types';
+import { ContextMenu, Icon, ToolButton, Toolbar, errorText, useDialogs } from './ui';
+import type { MenuItem } from './ui';
+import { childPath, forget, moveExpansion, parentOf, targetFolder, validateName } from './explorerOperations';
+import { Worktrees } from './Worktrees';
 
 export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioContext }) {
   const [root, setRoot] = useState(context.ruby_root);
@@ -16,6 +20,10 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
   const operations = useRef(new AbortController());
   const openingRequest = useRef(false);
   const tree = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{ x: number; y: number; entry?: Entry }>();
+  const [busy, setBusy] = useState(false);
+  const [reveal, setReveal] = useState<string>();
+  const dialogs = useDialogs(rpc, context);
 
   useEffect(() => {
     const current = ++epoch.current;
@@ -87,6 +95,91 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
     }
   }
 
+  async function reload(folder: string) {
+    const items = await rpc.call<Entry[]>('files/list', { root, path: folder }, { signal: operations.current.signal });
+    setEntries(previous => ({ ...previous, [folder]: items }));
+    return items;
+  }
+
+  function entryAt(path: string | undefined) {
+    if (!path) return undefined;
+    return entries[parentOf(path)]?.find(item => item.path === path);
+  }
+
+  async function operate(action: () => Promise<void>) {
+    if (busy || !root) return;
+    const current = epoch.current;
+    setBusy(true); setError('');
+    try { await action(); }
+    catch (reason) { if (current === epoch.current) setError(errorText(reason)); }
+    finally { if (current === epoch.current) setBusy(false); }
+  }
+
+  const create = (directory: boolean, at?: Entry) => operate(async () => {
+    const folder = targetFolder(at ?? entryAt(selected));
+    const answer = await dialogs.show({ kind: 'prompt', title: directory ? 'Add folder' : 'Add file',
+      label: 'Name', value: directory ? 'new_folder' : 'new_file.rb' });
+    if (answer.button === null || answer.value === undefined) return;
+    const problem = validateName(answer.value);
+    if (problem) throw new Error(problem);
+    const path = childPath(folder, answer.value.trim());
+    await rpc.call('files/create', { root, path, directory, text: '' }, { signal: operations.current.signal });
+    await reload(folder);
+    setExpanded(previous => new Set(previous).add(folder));
+    setSelected(path); setReveal(path);
+    if (!directory && context.capabilities?.native_ruby_editor) await openEditor(path);
+  });
+
+  const rename = (entry: Entry) => operate(async () => {
+    const answer = await dialogs.show({ kind: 'prompt', title: 'Rename', label: 'Name', value: entry.name });
+    if (answer.button === null || answer.value === undefined || answer.value.trim() === entry.name) return;
+    const problem = validateName(answer.value);
+    if (problem) throw new Error(problem);
+    const folder = parentOf(entry.path);
+    const destination = childPath(folder, answer.value.trim());
+    await rpc.call('files/move', { root, path: entry.path, destination }, { signal: operations.current.signal });
+    const moved = moveExpansion(expanded, entry.path, destination);
+    const cleared = forget(entries, moved, entry.path);
+    setEntries(cleared.entries);
+    setExpanded(entry.directory ? moved : cleared.expanded);
+    await reload(folder);
+    for (const key of moved) if (key !== '.' && (key === destination || key.startsWith(`${destination}/`))) await reload(key);
+    setSelected(destination); setReveal(destination);
+  });
+
+  const remove = (entry: Entry) => operate(async () => {
+    const answer = await dialogs.show({ kind: 'confirm', title: 'Warning', warning: true, buttons: ['Delete', 'Cancel'],
+      message: entry.directory
+        ? `Are you sure you want to delete the folder '${entry.path}' and everything in it? You cannot undo this.`
+        : `Are you sure you want to delete '${entry.path}'? You cannot undo this.` });
+    if (answer.button !== 'Delete') return;
+    await rpc.call('files/delete', { root, path: entry.path, recursive: entry.directory }, { signal: operations.current.signal });
+    const cleared = forget(entries, expanded, entry.path);
+    setEntries(cleared.entries); setExpanded(cleared.expanded);
+    await reload(parentOf(entry.path));
+    setSelected(undefined);
+  });
+
+  const refresh = () => operate(async () => {
+    const folders = ['.', ...[...expanded].filter(folder => folder !== '.')];
+    setEntries({});
+    for (const folder of folders) {
+      try { await reload(folder); }
+      catch { setExpanded(previous => { const next = new Set(previous); next.delete(folder); return next; }); }
+    }
+  });
+
+  function menuItems(entry?: Entry): MenuItem[] {
+    const items: MenuItem[] = [];
+    if (entry && !entry.directory) items.push({ label: 'Open', shortcut: 'Enter', action: () => void openEditor(entry.path) }, 'separator');
+    items.push({ label: 'Add file…', action: () => void create(false, entry) },
+      { label: 'Add folder…', action: () => void create(true, entry) });
+    if (entry) items.push('separator', { label: 'Rename…', shortcut: 'F2', action: () => void rename(entry) },
+      { label: 'Delete', shortcut: 'Del', action: () => void remove(entry) });
+    items.push('separator', { label: 'Refresh', action: () => void refresh() });
+    return items;
+  }
+
   const flat: { entry: Entry; depth: number }[] = [];
   function visit(path: string, depth: number) {
     for (const entry of entries[path] ?? []) {
@@ -96,10 +189,27 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
   }
   visit('.', 0);
   const start = Math.max(0, Math.floor(scroll / 24) - 8);
+  const revealIndex = reveal ? flat.findIndex(item => item.entry.path === reveal) : -1;
+  useEffect(() => {
+    // Like App Explorer, a created or renamed item is scrolled into view in the virtualized tree.
+    if (revealIndex < 0 || !tree.current) return;
+    const top = revealIndex * 24, view = tree.current;
+    if (top < view.scrollTop || top + 24 > view.scrollTop + view.clientHeight) view.scrollTo({ top: Math.max(0, top - view.clientHeight / 2) });
+    setReveal(undefined);
+  }, [revealIndex]);
   const visible = flat.slice(start, start + 80);
 
   return <section className="explorer-panel" aria-label="Ruby App Explorer">
-    <div className="tool-heading">Ruby App Explorer</div>
+    {root && <Toolbar label="Ruby App Explorer actions">
+      <ToolButton icon="newFile" label="Add file…" onClick={() => void create(false)} disabled={busy} />
+      <ToolButton icon="newFolder" label="Add folder…" onClick={() => void create(true)} disabled={busy} />
+      <ToolButton icon="rename" label="Rename… (F2)" onClick={() => { const entry = entryAt(selected); if (entry) void rename(entry); }}
+        disabled={busy || !entryAt(selected)} />
+      <ToolButton icon="delete" label="Delete (Del)" onClick={() => { const entry = entryAt(selected); if (entry) void remove(entry); }}
+        disabled={busy || !entryAt(selected)} />
+      <span className="mx-spacer" />
+      <ToolButton icon="refresh" label="Refresh" onClick={() => void refresh()} disabled={busy} />
+    </Toolbar>}
     {error && <div role="alert" className="error">{error}</div>}
     {state === 'no-project' && <p className="hint">Open a Mendix project to browse its Ruby representation.</p>}
     {state === 'loading' && <p role="status">Loading Ruby project…</p>}
@@ -107,7 +217,9 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
     {state === 'converting' && <p role="status">Converting to Ruby… {progress}</p>}
     {root && <>
       <div className="project-path" title={root}>{root.split('/').pop()}</div>
-      <div ref={tree} className="file-tree" role="tree" aria-label="Ruby files" onScroll={event => setScroll(event.currentTarget.scrollTop)}>
+      <div ref={tree} className="file-tree" role="tree" aria-label="Ruby files" onScroll={event => setScroll(event.currentTarget.scrollTop)}
+        onContextMenu={event => { if (event.target === event.currentTarget || (event.target as HTMLElement).parentElement === event.currentTarget) {
+          event.preventDefault(); setSelected(undefined); setMenu({ x: event.clientX, y: event.clientY }); } }}>
         <div style={{ height: flat.length * 24, position: 'relative' }}>
           {visible.map(({ entry, depth }, offset) => <button key={entry.path} role="treeitem"
             aria-level={depth + 1} aria-expanded={entry.directory ? expanded.has(entry.path) : undefined}
@@ -115,7 +227,14 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
             className="tree-row" style={{ top: (start + offset) * 24, paddingLeft: 6 + depth * 16 }}
             title={entry.path} onClick={() => void activate(entry)}
             onDoubleClick={() => { if (!entry.directory) void openEditor(entry.path); }}
+            onContextMenu={event => { event.preventDefault(); event.stopPropagation(); setSelected(entry.path); setMenu({ x: event.clientX, y: event.clientY, entry }); }}
             onKeyDown={event => {
+              if (event.key === 'F2') { event.preventDefault(); void rename(entry); return; }
+              if (event.key === 'Delete') { event.preventDefault(); void remove(entry); return; }
+              if (event.key === 'ContextMenu' || (event.key === 'F10' && event.shiftKey)) {
+                event.preventDefault(); const box = event.currentTarget.getBoundingClientRect();
+                setMenu({ x: box.left + 24, y: box.bottom, entry }); return;
+              }
               if (event.key === 'Enter' && !entry.directory) {
                 event.preventDefault(); setSelected(entry.path); void openEditor(entry.path); return;
               }
@@ -130,11 +249,17 @@ export function Explorer({ rpc, context }: { rpc: StudioRpc; context: StudioCont
                   (event.key === 'ArrowLeft' && entry.directory && expanded.has(entry.path))) {
                 event.preventDefault(); void activate(entry);
               }
-            }}><span aria-hidden="true">{entry.directory ? expanded.has(entry.path) ? '▾' : '▸' : '·'}</span><span>{entry.name}</span></button>)}
+            }}><span className="mx-chevron" aria-hidden="true">{entry.directory ? <svg viewBox="0 0 16 16" width="12" height="12">
+              <path d={expanded.has(entry.path) ? 'M4 6l4 4 4-4' : 'M6 4l4 4-4 4'} fill="none" stroke="currentColor" strokeWidth="1.2" /></svg> : null}</span>
+              <Icon name={entry.directory ? 'folder' : entry.name.endsWith('.rb') ? 'ruby' : 'file'} /><span>{entry.name}</span></button>)}
         </div>
       </div>
       {flat.length === 0 && <p className="hint">No files in this Ruby project.</p>}
+      <Worktrees rpc={rpc} context={context} root={root} signal={operations.current.signal}
+        onSwitched={next => { setRoot(next); setEntries({}); setExpanded(new Set(['.'])); setSelected(undefined); }} />
     </>}
+    {menu && <ContextMenu x={menu.x} y={menu.y} items={menuItems(menu.entry)} onClose={() => setMenu(undefined)} />}
+    {dialogs.element}
     {opening && <p role="status">Opening {opening}…</p>}
   </section>;
 }
