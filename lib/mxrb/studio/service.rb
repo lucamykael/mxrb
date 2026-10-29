@@ -317,7 +317,13 @@ module Mxrb
 
       # ── Sync ─────────────────────────────────────────────────────────────
 
-      def sync_link(params, context) = sync(params, context).link!
+      # `from_conversion` links from the model the Ruby project was converted
+      # from, so what both sides changed since then can be synchronized.
+      def sync_link(params, context)
+        base_model = conversion_model(params) if params['from_conversion']
+        sync(params, context).link!(base_model:)
+      end
+
       def sync_unlink(params, context) = sync(params, context).unlink!
       def sync_status(params, context) = sync(params, context).status
 
@@ -462,6 +468,22 @@ module Mxrb
       def task_configurations(params)
         require_relative 'task_configurations'
         TaskConfigurations.new(params.fetch('project'), state_root: state_root(params))
+      end
+
+      # A conversion keeps its source snapshot beside the Ruby project; earlier
+      # conversions left it among the workspace snapshots of the state root.
+      def conversion_model(params)
+        name = File.basename(params.fetch('model'))
+        conversion = File.dirname(File.realpath(params.fetch('ruby_root')))
+        own = Dir.glob(File.join(conversion, 'snapshot', '*', 'model', name))
+        candidates = own.empty? ? earlier_conversion_models(conversion, name, state_root(params)) : own
+        candidates.max_by { File.mtime(_1) } ||
+          raise(ArgumentError, 'the model this Ruby project was converted from is no longer available')
+      end
+
+      def earlier_conversion_models(conversion, name, root)
+        converted_at = File.mtime(conversion) + 60
+        Dir.glob(File.join(root, 'snapshots', '*', 'model', name)).select { File.mtime(_1) <= converted_at }
       end
 
       def sync(params, context)

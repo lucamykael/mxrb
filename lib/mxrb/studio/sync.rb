@@ -93,7 +93,12 @@ module Mxrb
       # Records the current model and Ruby project as the synchronized base.
       # The Ruby must generate; only the MXRB-owned `.mxrb/` metadata of the
       # Ruby project is refreshed from the model.
-      def link!
+      # Without `base_model` the current model and Ruby project are the base: they
+      # are taken to be in sync. With the model the Ruby project was converted
+      # from, what either side changed since the conversion stays pending.
+      def link!(base_model: nil)
+        return link_from(base_model) if base_model
+
         with_progress('Linking Ruby project') do
           Dir.mktmpdir('mxrb-link-') do |scratch|
             export = File.join(scratch, 'export')
@@ -105,6 +110,18 @@ module Mxrb
             generate(generated, root: snapshot)
             write_link(build_base(base_ruby: export, generated: File.join(generated, File.basename(model_path)),
                                   ruby_source: snapshot))
+          end
+          clear_conflicts
+          status
+        end
+      end
+
+      def link_from(base_model)
+        with_progress('Linking Ruby project') do
+          Dir.mktmpdir('mxrb-link-') do |scratch|
+            export = File.join(scratch, 'export')
+            export(base_model, export)
+            write_link(build_base(base_ruby: export, generated: nil, ruby_source: export, base_model:))
           end
           clear_conflicts
           status
@@ -144,7 +161,11 @@ module Mxrb
         raise ArgumentError, 'document_state needs a unit_id or a path' unless unit_id || path
 
         current = status
-        return current.slice(:linked, :state) unless current[:linked]
+        unless current[:linked]
+          # Unlinked, the file's declarations still name their documents in the current model.
+          units = unit_id ? [unit_id.downcase] : declared_units_in(model_path, [ruby_root], path)
+          return current.slice(:linked, :state).merge(unit_ids: units)
+        end
 
         units = unit_id ? [unit_id.downcase] : declared_units(read_link, path)
         matches = current[:documents].select { units.include?(_1[:unit_id]) || (path && _1[:files].include?(path)) }
@@ -234,17 +255,17 @@ module Mxrb
       # The base is a copy of the model and of the Ruby files. The Ruby export
       # of the model and the model generated from the Ruby are kept when they
       # are already known and otherwise produced when a later run needs them.
-      def build_base(base_ruby:, generated:, ruby_source:, previous: {})
+      def build_base(base_ruby:, generated:, ruby_source:, previous: {}, base_model: model_path)
         FileUtils.mkdir_p(state_directory, mode: 0o700)
         directory = Dir.mktmpdir('base-', state_directory)
-        base_record(directory, base_ruby, generated, previous, ruby_source)
+        base_record(directory, base_ruby, generated, previous, ruby_source, base_model)
       rescue StandardError
         FileUtils.rm_rf(directory)
         raise
       end
 
-      def base_record(directory, base_ruby, generated, previous, ruby_source)
-        model = Snapshot.new(model_path, destination_root: File.join(directory, 'model'), assets: false).create
+      def base_record(directory, base_ruby, generated, previous, ruby_source, base_model = model_path)
+        model = Snapshot.new(base_model, destination_root: File.join(directory, 'model'), assets: false).create
         ruby = File.join(directory, 'ruby')
         copy_tree(ruby_source, ruby)
         export = File.join(directory, 'export')
@@ -881,10 +902,14 @@ module Mxrb
       # Units a Ruby file declares, read from the file as it is now (or from
       # the base when it was removed).
       def declared_units(link, path)
-        file = [File.join(ruby_root, path), File.join(link.fetch('base_files'), path)].find { File.file?(_1) }
+        declared_units_in(link.fetch('base_model'), [ruby_root, link.fetch('base_files')], path)
+      end
+
+      def declared_units_in(model, roots, path)
+        file = roots.map { File.join(_1, path) }.find { File.file?(_1) }
         return [] unless file && path.end_with?('.rb')
 
-        index = artifact_index(units_of(link.fetch('base_model')))
+        index = artifact_index(units_of(model))
         Artifacts.declarations(File.read(file, encoding: Encoding::UTF_8), path:)
                  .filter_map { artifact_unit(index, _1) }.uniq
       end
