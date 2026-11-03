@@ -150,6 +150,16 @@ module Mxrb
         "# frozen_string_literal: true\n\nnavigation do\n#{profiles.join("\n")}\nend\n"
       end
 
+      # The writer turns `offline: true` into the suffixed kind, so the flag stays
+      # out of a stored kind it would rewrite: bare 'Offline' or an unsuffixed kind
+      # of a profile offline only by name or by its legacy OfflineEnabled6 field.
+      def offline_flag_round_trips?(profile)
+        return false unless profile[:offline]
+
+        kind = profile[:kind].to_s
+        kind.empty? || (kind.end_with?('Offline') && kind != 'Offline')
+      end
+
       def navigation_profile_source(profile)
         return native_navigation_profile_source(profile) if profile[:kind].to_s == 'Native'
 
@@ -165,7 +175,7 @@ module Mxrb
         args << "menu: #{ruby(profile[:menu])}" if profile[:menu]
         role_homes = profile.fetch(:role_homes, {})
         args << "role_homes: #{ruby(role_homes)}" if role_homes.is_a?(Hash) && !role_homes.empty?
-        args << 'offline: true' if profile[:offline]
+        args << 'offline: true' if offline_flag_round_trips?(profile)
         args << "enabled: #{ruby(profile[:enabled])}" unless profile[:enabled].nil?
         args << "offline_enabled: #{ruby(profile[:offline_enabled])}" unless
           profile[:offline_enabled].nil?

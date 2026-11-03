@@ -339,7 +339,7 @@ module Mxrb
           end
           widget.fetch('regions', {}).each do |name, widgets|
             sources << runtime_named_widget_region_source(
-              'region', widgets, indentation, generic_sink:, name:
+              'region', widgets, indentation, generic_sink:, name: name.to_s
             )
           end
           Array(widget['slots']).each do |slot|

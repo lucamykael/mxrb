@@ -57,6 +57,23 @@ RSpec.describe 'Ruby attribute-based widget conditions' do # rubocop:disable Met
       .to eq('input_condition("true", source: page_variable(nil, kind: :current))')
   end
 
+  it 'leaves the empty expression model Studio Pro stores out of input conditions' do
+    exporter = Mxrb::RubyApp::Exporter.allocate
+    empty = { 'ExpressionModel' => { '$Type' => 'Expressions$NoExpression' } }
+    conditions = [{ 'AttributeValue' => 'true', 'EditableVisible' => true }]
+    expect(exporter.send(:runtime_input_condition_source,
+                         'attribute' => 'App.Item.Unlocked', 'conditions' => conditions, 'unknown_native' => empty))
+      .to eq('input_condition(attribute: "App.Item.Unlocked", conditions: [["true", true]])')
+
+    # Any other native content is real model state and keeps the generic form.
+    [{ 'ExpressionModel' => { '$Type' => 'Expressions$Literal' } },
+     empty.merge('Other' => true), 'bad'].each do |native|
+      expect(exporter.send(:runtime_input_condition_source, 'expression' => 'true', 'unknown_native' => native))
+        .to be_nil
+    end
+    expect(exporter.send(:without_empty_expression_model, nil)).to be_nil
+  end
+
   it 'keeps unsupported condition shapes generic and types data view conditions' do
     exporter = Mxrb::RubyApp::Exporter.allocate
     conditions = [{ 'AttributeValue' => 'true', 'EditableVisible' => true },

@@ -52,6 +52,51 @@ RSpec.describe 'native mobile navigation profiles' do
     expect(writer.send(:offline_profile_kind, 'PhoneOffline', true)).to eq('PhoneOffline')
     expect(writer.send(:offline_profile_kind, 'Native', true)).to eq('Native')
     expect(writer.send(:offline_profile_kind, 'Tablet', false)).to eq('Tablet')
+    expect(writer.send(:offline_profile_kind, 'Offline', false)).to eq('Offline')
+  end
+
+  it 'keeps a stored profile kind through a Ruby round trip' do
+    profile_kinds = lambda do |path|
+      mpr = Mxrb::IO::MprFile.open(path)
+      document = mpr.all_units.map { mpr.parse_contents(_1) }
+                    .find { _1['$Type'] == 'Navigation$NavigationDocument' }
+      Mxrb::IO::BsonCodec.parse_array(document['Profiles']).fetch(:items).to_h { [_1['Name'], _1['Kind']] }
+    ensure
+      mpr&.close
+    end
+
+    Dir.mktmpdir do |dir|
+      source = File.join(dir, 'source.mpr')
+      exported = File.join(dir, 'exported')
+      rebuilt = File.join(dir, 'rebuilt.mpr')
+      Mxrb.define(source) do
+        mendix_version '11.12.1'
+        self.module(:App) { page(:Home) }
+        navigation do
+          profile :BareOffline, kind: 'Offline', home_page: 'App.Home'
+          profile :Stored, kind: 'TabletOffline', home_page: 'App.Home'
+          profile :OfflineByName, kind: 'Responsive', home_page: 'App.Home'
+          profile :LegacyField, kind: 'Phone', offline_enabled: true, home_page: 'App.Home'
+        end
+      end
+      expected = { 'BareOffline' => 'Offline', 'Stored' => 'TabletOffline',
+                   'OfflineByName' => 'Responsive', 'LegacyField' => 'Phone' }
+      expect(profile_kinds.call(source)).to eq(expected)
+
+      Mxrb::Exporter.new(source, exported, mode: :ruby).export!
+      Mxrb::RubyApp.compile(exported, rebuilt)
+      expect(profile_kinds.call(rebuilt)).to eq(expected)
+    end
+  end
+
+  it 'asks for the offline flag only when the writer would keep the stored kind' do
+    exporter = Mxrb::Exporter.allocate
+    flag = ->(profile) { exporter.send(:offline_flag_round_trips?, profile) }
+    expect(flag.call({ offline: true, kind: 'ResponsiveOffline' })).to be(true)
+    expect(flag.call({ offline: true, kind: '' })).to be(true)
+    expect(flag.call({ offline: true, kind: 'Offline' })).to be(false)
+    expect(flag.call({ offline: true, kind: 'Responsive' })).to be(false)
+    expect(flag.call({ offline: false, kind: 'ResponsiveOffline' })).to be(false)
   end
 
   it 'writes a native profile with its home pages, bottom bar and settings' do
