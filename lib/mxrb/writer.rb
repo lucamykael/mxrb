@@ -2820,10 +2820,10 @@ module Mxrb
     # any other value as Responsive.
     def offline_profile_kind(kind, offline)
       kind = kind.to_s
+      return kind if !offline || kind == 'Native'
       return 'ResponsiveOffline' if kind == 'Offline'
-      return kind if !offline || kind.end_with?('Offline') || kind == 'Native'
 
-      "#{kind}Offline"
+      kind.end_with?('Offline') ? kind : "#{kind}Offline"
     end
 
     def navigation_not_found_home_doc(page, microflow, previous: nil)
