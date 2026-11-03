@@ -38,6 +38,10 @@ artifacts, and 4,819 references in 100.544 seconds. The set covers LearnNow, SLA
 SLATaskAppNative, MyFirstModule, CourseManager, RubyBridgeSandbox, and
 VetClinic.
 
+SLATaskAppNative shares `mprcontents/` with SLATaskApp, and the library refuses to
+open it in place. The gate certifies it from a temporary copy whose `mprname`
+names it, and reports the owner as `contents_shared_with`.
+
 SLATaskApp had one stale content hash and RubyBridgeSandbox had two. The gate
 repaired only `Unit.ContentsHash` in temporary copies, recorded the changed
 UUIDs, and preserved the original BSON bytes. Source files were not modified.

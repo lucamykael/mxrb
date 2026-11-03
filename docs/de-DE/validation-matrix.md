@@ -29,6 +29,11 @@ MPRs in 14 aufeinanderfolgenden Roundtrips: **7/7 bestanden**, 2.799 Units,
 SLATaskAppNative, MyFirstModule, CourseManager, RubyBridgeSandbox und
 VetClinic.
 
+SLATaskAppNative teilt sich `mprcontents/` mit SLATaskApp, und die Bibliothek
+verweigert das Öffnen am Ursprungsort. Das Gate zertifiziert es aus einer
+temporären Kopie, deren `mprname` es benennt, und meldet den Eigentümer als
+`contents_shared_with`.
+
 SLATaskApp enthielt einen veralteten Content-Hash, RubyBridgeSandbox zwei. Das
 Gate reparierte ausschließlich `Unit.ContentsHash` in temporären Kopien,
 protokollierte die geänderten UUIDs und bewahrte die ursprünglichen BSON-Bytes.

@@ -21,6 +21,24 @@ end.parse!
 abort 'at least one MPR is required' if ARGV.empty?
 abort '--cycles must be greater than zero' unless options[:cycles].positive?
 
+# The name in mprcontents/mprname when it is not this MPR. The library refuses to
+# open such a project, because writing to it would corrupt the owner's contents.
+def contents_owner(source)
+  marker = File.join(File.dirname(source), 'mprcontents', 'mprname')
+  return unless File.file?(marker)
+
+  owner = File.read(marker).strip
+  owner unless owner == File.basename(source)
+end
+
+def copy_package(source, directory)
+  copy = File.join(directory, File.basename(source))
+  FileUtils.cp(source, copy)
+  contents = File.join(File.dirname(source), 'mprcontents')
+  FileUtils.cp_r(contents, directory) if File.directory?(contents)
+  copy
+end
+
 files = ARGV.map { File.expand_path(_1) }.uniq
 # rubocop:disable Metrics/BlockLength
 results = files.map do |source|
@@ -32,13 +50,18 @@ results = files.map do |source|
     Dir.mktmpdir('mxrb-certify-') do |directory|
       current = source
       repairs = []
-      unless Mxrb.validate(current).valid?
+      valid = Mxrb.validate(current).valid?
+      if !valid && (owner = contents_owner(source))
+        current = copy_package(source, directory)
+        File.write(File.join(directory, 'mprcontents', 'mprname'), File.basename(source))
+        row[:contents_shared_with] = owner
+        warn "[mxrb] #{row[:name]}: certifying a temporary copy, because mprcontents belongs to #{owner}"
+        valid = Mxrb.validate(current).valid?
+      end
+      unless valid
         raise 'original validation failed' unless options[:repair_hashes]
 
-        current = File.join(directory, File.basename(source))
-        FileUtils.cp(source, current)
-        contents = File.join(File.dirname(source), 'mprcontents')
-        FileUtils.cp_r(contents, directory) if File.directory?(contents)
+        current = copy_package(source, directory) if current == source
         mpr = Mxrb::IO::MprFile.open(current, readonly: false)
         repairs = mpr.repair_content_hashes!
         mpr.close
