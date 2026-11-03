@@ -299,6 +299,7 @@ module Mxrb
         # An input's conditional editability: an expression and/or attribute values,
         # optionally read from another widget's object. nil keeps the generic form.
         def runtime_input_condition_source(condition)
+          condition = without_empty_expression_model(condition)
           return unless condition.is_a?(Hash) && condition.any? &&
                         (condition.keys - %w[expression attribute conditions source_variable roles
                                              ignore_security]).empty?
@@ -325,6 +326,18 @@ module Mxrb
           arguments << "roles: #{condition.fetch('roles').inspect}" if condition.key?('roles')
           arguments << 'ignore_security: true' if condition['ignore_security'] == true
           "input_condition(#{arguments.join(', ')})"
+        end
+
+        # Studio Pro stores an empty expression model on conditions without an
+        # expression; the writer restores it, so it is not part of the public source.
+        def without_empty_expression_model(condition)
+          return condition unless condition.is_a?(Hash)
+
+          native = condition['unknown_native']
+          return condition unless native.is_a?(Hash) && native.keys == ['ExpressionModel'] &&
+                                  native.dig('ExpressionModel', '$Type') == 'Expressions$NoExpression'
+
+          condition.except('unknown_native')
         end
 
         # Attribute values as [value, matches] pairs; model identities are not public.

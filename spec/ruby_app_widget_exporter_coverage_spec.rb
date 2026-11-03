@@ -136,6 +136,9 @@ RSpec.describe Mxrb::RubyApp::Exporter do
     region_source = exporter.send(:runtime_widget_regions_source, regions, 0, generic_sink: true)
     expect(region_source).to include('body', 'footer do', 'region "sidebar" do')
     expect(region_source).to include('slot path: ["content", 0]', 'role: "content"', 'text "Slot"')
+    # Native parsers key regions by symbol; the generated source names them the same way.
+    expect(exporter.send(:runtime_widget_regions_source, { 'regions' => { sidebar: [] } }, 0, generic_sink: true))
+      .to include('region "sidebar"')
     expect(exporter.send(:runtime_widget_keyword, :snippet, 'snippet', generic_sink: true)).to eq('from')
     expect(exporter.send(:runtime_widget_keyword, :text, 'class', generic_sink: false)).to eq('class_name')
     expect(exporter.send(:runtime_widget_keyword, :text, :caption, generic_sink: false)).to eq('caption')
@@ -422,6 +425,14 @@ RSpec.describe Mxrb::RubyApp::Exporter do
     expect(exporter.send(:runtime_grid_columns_expression, [{ 'name' => 1 }])).to be_nil
     expect(exporter.send(:runtime_grid_columns_expression, [{ 'name' => 'X', 'bad' => 1 }])).to be_nil
     expect(exporter.send(:runtime_grid_columns_expression, [{ 'name' => 'X', 'filter' => nil }])).to be_nil
+
+    gallery = {
+      'type' => 'gallery', 'name' => 'Courses', 'events' => [], 'children' => [],
+      'options' => { 'source' => { 'kind' => 'microflow', 'name' => 'Sales.DS_Courses' } }
+    }
+    expect(exporter.send(:runtime_dsl_sink_typed?, :gallery, gallery['options'], gallery)).to be(true)
+    expect(exporter.send(:runtime_widget_call_source, gallery, 0, generic_sink: true))
+      .to start_with('gallery "Courses"').and include('source:', 'Sales.DS_Courses')
 
     sort = [
       { 'attribute' => 'Name', 'direction' => 'asc' },

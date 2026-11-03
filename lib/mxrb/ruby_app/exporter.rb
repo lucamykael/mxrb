@@ -327,7 +327,7 @@ module Mxrb
           allowed_extensions editable max_file_size show_file_in_browser mode tab_index
           class style dynamic_class visible
         ],
-        gallery: %w[class style dynamic_class visible entity xpath association context_variable sort],
+        gallery: %w[class style dynamic_class visible entity xpath association context_variable source sort],
         image_uploader: %w[
           allowed_extensions caption editable max_file_size thumbnail_width thumbnail_height
           tab_index class style dynamic_class visible
