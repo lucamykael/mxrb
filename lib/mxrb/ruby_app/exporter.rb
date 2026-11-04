@@ -144,6 +144,7 @@ module Mxrb
         modules.flat_map { _1.fetch('pages') }.each do |page|
           PageEdits.write_baseline(@output_dir, page.fetch('id'), File.join(@output_dir, page.fetch('path')))
         end
+        PresentationEdits.write_baselines(@output_dir)
       end
 
       def read_embedded_sources

@@ -20,9 +20,14 @@ formatação não mudam nada.
 
 O frontend React lê o mesmo Ruby. Um projeto sem bases, exportado antes disso, mantém
 seus documentos até ser exportado de novo, e `.mxrb/preserve_native_pages` desliga
-esse comportamento para um projeto que mantém páginas só de runtime. Layouts e
-snippets em `app/presentation/` não são cobertos. Um projeto vinculado ao Studio Pro
+esse comportamento para um projeto que mantém páginas só de runtime. Um projeto
+vinculado ao Studio Pro
 sincroniza pelo `project.rb`, cujas declarações de página são a fonte do documento.
+
+Layouts e snippets em `app/presentation/` seguem as mesmas regras, com as bases em
+`.mxrb/presentation_baselines/`. Mudar parâmetros ou variáveis de um snippet faz a
+compilação falhar, assim como editar um menu, imagem ou ícone, ou adicionar ou
+remover uma declaração.
 
 ## Páginas, widgets e actions do mobile nativo
 
