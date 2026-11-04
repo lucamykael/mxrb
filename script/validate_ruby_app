@@ -39,24 +39,32 @@ Dir.mktmpdir('mxrb-ruby-app-gate-') do |directory|
   end
 
   exported = File.join(directory, 'ruby')
-  rebuilt = File.join(directory, File.basename(source))
-  rebuilt = File.join(directory, 'rebuilt', File.basename(source)) if rebuilt == working_source
   Mxrb::Exporter.new(working_source, exported, mode: :ruby).export!
 
   audit = Mxrb::PublicSourceAudit.new(exported)
   audit_failure = JSON.pretty_generate(summary: audit.summary, violations: audit.violations.map(&:to_h))
   abort audit_failure unless audit.clean?
 
-  FileUtils.mv(File.join(exported, '.mxrb', 'mendix'), File.join(exported, '.mxrb', 'mendix.detached'))
-  Mxrb::RubyApp.compile(exported, rebuilt)
-  validation = Mxrb.validate(rebuilt)
-  comparison = Mxrb.compare(working_source, rebuilt)
-  abort validation.errors.join("\n") unless validation.valid?
-  abort comparison.differences.join("\n") unless comparison.identical?
+  # RubyApp.compile starts from the runtime copy of the original MPR when there is one,
+  # so a match from that copy alone says nothing about what the Ruby sources rebuild.
+  baselines = {
+    'runtime_copy' => File.join(exported, '.mxrb', 'mendix'),
+    'mendix_sidecar' => File.dirname(Mxrb::RubyApp::Manifest.load(exported).absolute_path('runtime_mpr'))
+  }
+  baselines.each do |rebuilt_from, hidden|
+    FileUtils.mv(hidden, "#{hidden}.detached")
+    rebuilt = File.join(directory, "rebuilt-from-#{rebuilt_from}", File.basename(source))
+    Mxrb::RubyApp.compile(exported, rebuilt)
+    validation = Mxrb.validate(rebuilt)
+    comparison = Mxrb.compare(working_source, rebuilt)
+    abort "rebuilt from #{rebuilt_from}:\n#{validation.errors.join("\n")}" unless validation.valid?
+    abort "rebuilt from #{rebuilt_from}:\n#{comparison.differences.join("\n")}" unless comparison.identical?
+    FileUtils.mv("#{hidden}.detached", hidden)
+  end
 
   puts JSON.generate({
     source:, contents_shared_with: shared_with, repaired_hashes: repairs.map { _1.fetch(:unit_id) },
-    public_source: audit.summary, valid: validation.valid?, identical: comparison.identical?
+    public_source: audit.summary, rebuilt_from: baselines.keys, valid: true, identical: true
   }.compact)
 end
 # rubocop:enable Metrics/BlockLength
