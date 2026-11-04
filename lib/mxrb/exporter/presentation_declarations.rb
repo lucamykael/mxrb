@@ -4,6 +4,20 @@ module Mxrb
   class Exporter
     # Declares image and icon collections, layouts, page templates, building blocks and snippets as Ruby.
     module PresentationDeclarations
+      DOCUMENT_METADATA_FIELDS = %w[$ID $Type Name].freeze
+      LAYOUT_FIELDS = %w[Appearance CanvasHeight CanvasWidth Content Documentation Excluded ExportLevel].freeze
+      PAGE_TEMPLATE_FIELDS = %w[
+        Appearance CanvasHeight CanvasWidth DisplayName Documentation DocumentationUrl Excluded ExportLevel
+        ImageData LayoutCall TemplateCategory TemplateCategoryWeight TemplateType
+      ].freeze
+      BUILDING_BLOCK_FIELDS = %w[
+        CanvasHeight CanvasWidth DisplayName Documentation DocumentationUrl Excluded ExportLevel ImageData
+        Platform TemplateCategory TemplateCategoryWeight Widgets
+      ].freeze
+      SNIPPET_FIELDS = %w[
+        CanvasHeight CanvasWidth Documentation Excluded ExportLevel Parameters Type Variables Widgets
+      ].freeze
+
       private
 
       def image_collection_declaration(document)
@@ -42,6 +56,8 @@ module Mxrb
 
       def layout_document_declaration(document)
         doc = document.fetch(:doc)
+        return native_document_declaration(document) unless declared_fields?(doc, LAYOUT_FIELDS)
+
         semantic_call_source(:layout_document, document, {
                                appearance: presentation_value_spec(doc['Appearance']),
                                canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
@@ -53,6 +69,8 @@ module Mxrb
 
       def page_template_document_declaration(document)
         doc = document.fetch(:doc)
+        return native_document_declaration(document) unless declared_fields?(doc, PAGE_TEMPLATE_FIELDS)
+
         semantic_call_source(:page_template_document, document, {
                                appearance: presentation_value_spec(doc['Appearance']),
                                canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
@@ -70,6 +88,8 @@ module Mxrb
 
       def building_block_document_declaration(document)
         doc = document.fetch(:doc)
+        return native_document_declaration(document) unless declared_fields?(doc, BUILDING_BLOCK_FIELDS)
+
         semantic_call_source(:building_block_document, document, {
                                canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
                                display_name: doc.fetch('DisplayName', ''),
@@ -85,6 +105,8 @@ module Mxrb
 
       def snippet_document_declaration(document)
         doc = document.fetch(:doc)
+        return native_document_declaration(document) unless declared_fields?(doc, SNIPPET_FIELDS)
+
         semantic_call_source(:snippet_document, document, {
                                canvas_height: doc.fetch('CanvasHeight', 0), canvas_width: doc.fetch('CanvasWidth', 0),
                                documentation: doc.fetch('Documentation', ''), excluded: doc['Excluded'] == true,
@@ -94,6 +116,12 @@ module Mxrb
                                variables: presentation_value_spec(doc['Variables']),
                                widgets: presentation_value_spec(doc['Widgets'])
                              })
+      end
+
+      # A declaration writes exactly its own fields, so a document stored with other
+      # ones, as in older Mendix versions, would lose them. That one stays native.
+      def declared_fields?(document, fields)
+        (document.keys.map(&:to_s) - DOCUMENT_METADATA_FIELDS).sort == fields.sort
       end
 
       def presentation_value_spec(value)

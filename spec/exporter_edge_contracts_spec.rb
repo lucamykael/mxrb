@@ -6,18 +6,41 @@ require 'spec_helper'
 RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
   subject(:exporter) { described_class.allocate }
 
+  def declared_document(fields) = fields.to_h { [_1, nil] }
+
+  it 'keeps a presentation document native when it stores other fields than its declaration' do
+    fixture = lambda do |type, fields|
+      { type:, name: 'Shell', id: 'unit-id', container_id: 'module-id', containment: 'Documents',
+        doc: { '$Type' => type, 'Name' => 'Shell' }.merge(fields) }
+    end
+    allow(exporter).to receive(:native_fragment_ruby).and_return('{}')
+
+    {
+      'Forms$Layout' => { 'Widget' => {}, 'LayoutType' => 'Legacy' },
+      'Forms$PageTemplate' => { 'CanvasHeight' => 600 },
+      'Forms$BuildingBlock' => { 'Extra' => 1 },
+      'Forms$Snippet' => { 'Widget' => {} }
+    }.each do |type, fields|
+      expect(exporter.send(:integration_document_declaration, fixture.call(type, fields)))
+        .to start_with('native_document :Shell').and include(%(type: "#{type}"))
+    end
+  end
+
   it 'dispatches presentation documents and preserves binary values' do
     template = {
       type: 'Forms$PageTemplate', name: 'Starter', id: 'template-id', container_id: 'module-id',
-      doc: { 'ImageData' => BSON::Binary.new('preview') }
+      doc: declared_document(described_class::PresentationDeclarations::PAGE_TEMPLATE_FIELDS)
+           .merge('ImageData' => BSON::Binary.new('preview'))
     }
     block = {
       type: 'Forms$BuildingBlock', name: 'Card', id: 'block-id', container_id: 'module-id',
-      doc: { 'ImageData' => BSON::Binary.new('preview') }
+      doc: declared_document(described_class::PresentationDeclarations::BUILDING_BLOCK_FIELDS)
+           .merge('ImageData' => BSON::Binary.new('preview'))
     }
     snippet = {
       type: 'Forms$Snippet', name: 'Summary', id: 'snippet-id', container_id: 'module-id',
-      doc: { 'Parameters' => [2], 'Variables' => [2], 'Widgets' => [2] }
+      doc: declared_document(described_class::PresentationDeclarations::SNIPPET_FIELDS)
+           .merge('Parameters' => [2], 'Variables' => [2], 'Widgets' => [2])
     }
     expect(exporter.send(:integration_document_declaration, template)).to include('page_template_document')
     expect(exporter.send(:integration_document_declaration, block)).to include('building_block_document')

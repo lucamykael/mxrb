@@ -127,6 +127,9 @@ module Mxrb
           associations: mod.associations.sort_by(&:name).map { association_summary(_1) },
           pages: mod.pages.sort_by(&:name).map { page_summary(_1) },
           menus: mod.menus.sort_by(&:name).map { menu_summary(_1) },
+          presentation_documents: mod.presentation_documents.sort_by { _1.fetch(:name).to_s }.map do |document|
+            presentation_document_summary(document)
+          end,
           module_roles: mod.module_roles.sort_by { _1[:name].to_s },
           microflows: mod.microflows.sort_by(&:name).map { flow_summary(_1) },
           nanoflows: mod.nanoflows.sort_by(&:name).map { flow_summary(_1) }
@@ -189,6 +192,50 @@ module Mxrb
           page: item[:page],
           items: Array(item[:items]).map { menu_item_summary(_1) }
         }
+      end
+
+      def presentation_document_summary(document)
+        doc = document.fetch(:doc)
+        { name: document.fetch(:name), type: document.fetch(:type),
+          document: normalized_document(doc, widget_value_kinds(doc)) }
+      end
+
+      # The stored document without what regeneration may vary or does not use: element
+      # identities, the values pointing at them, and fields that are empty or false.
+      def normalized_document(value, kinds)
+        case value
+        when Hash
+          without_unused_action(value, kinds).to_h { [_1.to_s, normalized_document(_2, kinds)] }
+                                             .except('$ID').reject { |_key, entry| absent_field?(entry) }
+        when Array then value.map { normalized_document(_1, kinds) }
+        when BSON::Binary then null_pointer?(value) ? nil : :identity
+        else value
+        end
+      end
+
+      def absent_field?(value)
+        value.nil? || value == false || value == '' || value == {} ||
+          (value.is_a?(Array) && value.all?(Integer) && value.size <= 1)
+      end
+
+      def null_pointer?(value) = value.data.bytes.all?(&:zero?)
+
+      # Every widget value stores an action, which only an action property uses.
+      def without_unused_action(value, kinds)
+        return value unless value['$Type'] == 'CustomWidgets$WidgetProperty' && value['Value'].is_a?(Hash)
+        return value if kinds[IO::BsonCodec.extract_id(value['TypePointer'])] == 'Action'
+
+        value.merge('Value' => value['Value'].except('Action'))
+      end
+
+      def widget_value_kinds(value, kinds = {})
+        case value
+        when Hash
+          kinds[IO::BsonCodec.extract_id(value['$ID'])] = value.dig('ValueType', 'Type') if value.key?('ValueType')
+          value.each_value { widget_value_kinds(_1, kinds) }
+        when Array then value.each { widget_value_kinds(_1, kinds) }
+        end
+        kinds
       end
 
       def widget_summary(widget)

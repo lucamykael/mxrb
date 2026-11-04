@@ -86,8 +86,9 @@ Zugriffsregeln, Beziehungen, Seiten, Widgets, Events, Menüs und vollständige
 Microflow-/Nanoflow-Körper. 264 Flow-Körper und 1.304 Seitenknoten aus 25 Typen
 sind als bearbeitbares Ruby repräsentiert. Jede native Unit besitzt zusätzlich
 einen vollständigen bearbeitbaren Eintrag in `.mxrb/native_units.rb`.
-Layout- und Snippet-Dokumente werden nicht verglichen; ein identisches Ergebnis sagt
-also nichts über ihren Inhalt aus.
+Layouts, Page Templates, Building Blocks und Snippets werden wie gespeichert
+verglichen, ohne Element-Identitäten, leere oder falsche Felder, Null-Zeiger und die
+Aktion, die ein Widget-Wert speichert, wenn seine Eigenschaft keine Aktion ist.
 
 ## Offizielle Gates
 

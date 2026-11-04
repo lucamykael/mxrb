@@ -27,6 +27,8 @@ module Mxrb
         %w[DataView widgets] => 2,
         %w[MicroflowSettings outputMappings] => 3,
         %w[Page parameters] => 3,
+        %w[Snippet parameters] => 3,
+        %w[Snippet variables] => 3,
         %w[TabContainer tabPages] => 3,
         %w[WidgetValidation conditions] => 2
       }.transform_keys(&:freeze).freeze
@@ -607,12 +609,19 @@ module Mxrb
       end
 
       def storage_property_name(property)
+        return 'PlaceholderTemplate' if property.name == 'placeholderTemplate' && client_template_placeholder?
+
         StorageNaming.resolve(property).name
       end
 
+      def client_template_placeholder?
+        @mendix_version.to_s.split('.').first.to_i >= 10
+      end
+
+      # Mendix 10 replaced the plain Placeholder text with a PlaceholderTemplate.
       def legacy_placeholder_node?(property, value)
         property.name == 'placeholderTemplate' && value.is_a?(Node) &&
-          value.schema_type.name == 'ClientTemplate'
+          value.schema_type.name == 'ClientTemplate' && !client_template_placeholder?
       end
 
       def encode_legacy_placeholder(value, **_options)
