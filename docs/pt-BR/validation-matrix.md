@@ -55,6 +55,10 @@ de hashes continua explícito e temporário: uma unit do SLATaskApp e duas do
 RubyBridgeSandbox foram corrigidas em cópias; os outros onze projetos não
 precisaram de reparo.
 
+Esse gate também valida o SLATaskAppNative a partir de uma cópia temporária cujo
+`mprname` o nomeia, porque seu `mprcontents/` pertence ao SLATaskApp, e informa o
+dono em `contents_shared_with`.
+
 Esse gate encontrou e corrigiu vazamentos que o round-trip estrutural não
 detectava. Mapeamentos do Database Connector agora usam blocos de parâmetros
 ordenados; escalares, ações, fontes XPath e listas de objetos pluggable

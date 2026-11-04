@@ -61,6 +61,10 @@ identical semantic comparison: **13/13 passed**. Hash repair remains explicit
 and temporary: one stale hash in SLATaskApp and two in RubyBridgeSandbox were
 repaired in copies, while the other eleven inputs required no repair.
 
+This gate also validates SLATaskAppNative from a temporary copy whose `mprname`
+names it, because its `mprcontents/` belongs to SLATaskApp, and reports the owner
+as `contents_shared_with`.
+
 This gate exposed and fixed public Ruby leaks that the structural round-trip did
 not detect. Database Connector mappings now use ordered parameter blocks;
 schema-supported pluggable scalars, actions, XPath sources, and object lists use
