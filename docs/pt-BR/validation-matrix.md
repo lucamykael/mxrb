@@ -31,6 +31,10 @@ em 14 roundtrips consecutivos: **7/7 passes**, 2.799 units, 3.238 artefatos e
 4.819 referências em 100,544 s. Foram cobertos LearnNow, SLATaskApp, SLATaskAppNative,
 MyFirstModule, CourseManager, RubyBridgeSandbox e VetClinic.
 
+SLATaskAppNative compartilha `mprcontents/` com SLATaskApp, e a biblioteca se
+recusa a abri-lo no lugar. O gate o certifica a partir de uma cópia temporária
+cujo `mprname` o nomeia e informa o dono em `contents_shared_with`.
+
 SLATaskApp tinha um hash de conteúdo obsoleto e RubyBridgeSandbox tinha dois.
 O gate reparou somente `Unit.ContentsHash` em cópias temporárias, registrou os
 UUIDs alterados e preservou os bytes BSON originais. Os arquivos-fonte não
