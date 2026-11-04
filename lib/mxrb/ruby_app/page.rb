@@ -10,7 +10,7 @@ module Mxrb
 
       # Builds the runtime-facing widget projection without making the page an
       # authoritative native document. This keeps exported pages lossless via
-      # the MPR sidecar while presenting their structure as editable Ruby.
+      # the MPR sidecar; PageEdits applies their edits to the document.
       class WidgetTree
         include Dsl::WidgetComposite
         include Dsl::WidgetEvents
@@ -246,8 +246,8 @@ module Mxrb
         end
 
         # Declares an editable native Mendix page with the typed page/widget
-        # DSL. Existing exported pages may keep using #configure and remain
-        # untouched; only pages with #native are synchronized back to the MPR.
+        # DSL, which replaces the document. An exported page keeps using
+        # #configure, and PageEdits applies its edits to the document instead.
         def native(&block)
           qualified = require_qualified_mendix_name!
           builder = Dsl::PageBuilder.new(qualified.split('.', 2).last)

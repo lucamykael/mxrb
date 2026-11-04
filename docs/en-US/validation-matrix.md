@@ -70,9 +70,9 @@ result both times. The first rebuild removes the Mendix sidecar and starts from
 the runtime copy of the original MPR, so it shows that the public package compiles
 without the sidecar. The second removes that copy and starts from the sidecar, so
 it shows that the sidecar's Ruby and its preserved native units rebuild the model.
-13/13 projects pass both. Neither shows that edits reach the model from
-`app/pages/*.rb`: only a page that declares `native` is synchronized, and
-`mxrb portability` reports the others as `runtime_only`.
+13/13 projects pass both. Neither involves edits: compiling applies edits to
+`app/pages/*.rb` to the page documents, as
+[portability](portabilidade-ruby-typescript.md#editing-exported-pages) describes.
 
 This gate exposed and fixed public Ruby leaks that the structural round-trip did
 not detect. Database Connector mappings now use ordered parameter blocks;

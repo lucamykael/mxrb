@@ -109,6 +109,7 @@ module Mxrb
           copy_frontend_theme
           restore_embedded_sources(embedded_sources)
           refresh_native_frontend_sources(project, modules, embedded_sources)
+          write_page_baselines(modules)
           write_manifest(project, modules, runtime_mpr)
         end
         @output_dir
@@ -136,6 +137,13 @@ module Mxrb
         end
       ensure
         @native_fragment_store = previous
+      end
+
+      # Taken after embedded sources are restored: the document already holds their edits.
+      def write_page_baselines(modules)
+        modules.flat_map { _1.fetch('pages') }.each do |page|
+          PageEdits.write_baseline(@output_dir, page.fetch('id'), File.join(@output_dir, page.fetch('path')))
+        end
       end
 
       def read_embedded_sources

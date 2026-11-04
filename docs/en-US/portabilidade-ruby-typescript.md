@@ -1,5 +1,30 @@
 # Real portability between Ruby, TypeScript, and Mendix
 
+## Editing exported pages
+
+A page exported to `app/pages/*.rb` is a leaner projection of its Mendix document,
+so compilation applies your edits to the document instead of rebuilding it. The
+export keeps each page's source in `.mxrb/page_baselines/`. A page that still
+matches its baseline leaves the document untouched. Otherwise compilation
+evaluates both versions and applies only the differences:
+
+- the title, and the class and style of the page or of a widget;
+- a widget's caption, in the translations that read the old text. Other languages
+  keep theirs, so review them after changing a caption;
+- removing a widget, and reordering widgets that share a parent.
+
+Any other change fails the compilation and names the page and the field: adding a
+widget, moving one to another parent, roles, the data source, other widget options
+such as grid columns, and removing or renaming the page. Comments and formatting
+change nothing.
+
+The React frontend reads the same Ruby. A project without baselines, exported
+before this existed, keeps its documents unchanged until it is exported again, and
+`.mxrb/preserve_native_pages` turns this off for a project that keeps runtime-only
+pages. Layouts and snippets in `app/presentation/` are not covered. A project
+linked to Studio Pro synchronizes through `project.rb`, whose page declarations
+are the source of the document.
+
 ## Native mobile pages, widgets and actions
 
 A page on a native layout (`Forms$NativeLayoutContent`) exports as a
