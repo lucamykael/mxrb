@@ -16,7 +16,7 @@ RSpec.describe 'script/validate_ruby_app' do
     Mxrb.define(path) do
       mendix_version '11.12.1'
       native_units manifest
-      self.module(:App) { entity(:Item) { string :Name } }
+      self.module(:App) { page(:Home) { text 'message', caption: 'Original' } }
     end
     path
   end
@@ -24,6 +24,30 @@ RSpec.describe 'script/validate_ruby_app' do
   def validate(*arguments)
     script = File.expand_path('../script/validate_ruby_app', __dir__)
     Open3.capture3(RbConfig.ruby, script, *arguments)
+  end
+
+  # Changes the export before the gate rebuilds it, as a lossy exporter would.
+  def edit_export_preload(relative_glob)
+    <<~RUBY
+      $LOAD_PATH.unshift(#{File.expand_path('../lib', __dir__).inspect})
+      require 'mxrb'
+      Mxrb::Exporter.prepend(Module.new do
+        def export!(...)
+          super.tap do
+            Dir.glob(File.join(@output_dir, #{relative_glob.inspect})).each do |path|
+              File.write(path, File.read(path).sub('Original', 'Edited'))
+            end
+          end
+        end
+      end)
+    RUBY
+  end
+
+  def validate_after_editing_export(directory, relative_glob, *arguments)
+    preload = File.join(directory, 'edit_export.rb')
+    File.write(preload, edit_export_preload(relative_glob))
+    script = File.expand_path('../script/validate_ruby_app', __dir__)
+    Open3.capture3(RbConfig.ruby, '-r', preload, script, *arguments)
   end
 
   def package_digests(directory)
@@ -47,6 +71,30 @@ RSpec.describe 'script/validate_ruby_app' do
       )
       expect(stderr).to include('Shared.mpr: validating a temporary copy, because mprcontents belongs to Owner.mpr')
       expect(package_digests(directory)).to eq(before)
+    end
+  end
+
+  it 'rebuilds the model both from the runtime copy and from the Mendix sidecar' do
+    Dir.mktmpdir do |directory|
+      owner = make_split_project(File.join(directory, 'Owner.mpr'))
+
+      stdout, stderr, status = validate(owner)
+
+      expect(status).to be_success, stderr
+      expect(JSON.parse(stdout)).to include('rebuilt_from' => %w[runtime_copy mendix_sidecar])
+    end
+  end
+
+  it 'fails when the Mendix sidecar no longer rebuilds the original model' do
+    Dir.mktmpdir do |directory|
+      owner = make_split_project(File.join(directory, 'Owner.mpr'))
+
+      _stdout, stderr, status = validate_after_editing_export(
+        directory, '.mxrb/mendix/modules/App/**/*.rb', owner
+      )
+
+      expect(status).not_to be_success
+      expect(stderr).to include('rebuilt from mendix_sidecar', 'Original', 'Edited')
     end
   end
 

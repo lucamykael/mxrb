@@ -65,6 +65,15 @@ This gate also validates SLATaskAppNative from a temporary copy whose `mprname`
 names it, because its `mprcontents/` belongs to SLATaskApp, and reports the owner
 as `contents_shared_with`.
 
+Since November 4, the gate rebuilds each project twice and requires an identical
+result both times. The first rebuild removes the Mendix sidecar and starts from
+the runtime copy of the original MPR, so it shows that the public package compiles
+without the sidecar. The second removes that copy and starts from the sidecar, so
+it shows that the sidecar's Ruby and its preserved native units rebuild the model.
+13/13 projects pass both. Neither shows that edits reach the model from
+`app/pages/*.rb`: only a page that declares `native` is synchronized, and
+`mxrb portability` reports the others as `runtime_only`.
+
 This gate exposed and fixed public Ruby leaks that the structural round-trip did
 not detect. Database Connector mappings now use ordered parameter blocks;
 schema-supported pluggable scalars, actions, XPath sources, and object lists use
