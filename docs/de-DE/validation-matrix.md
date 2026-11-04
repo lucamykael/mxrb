@@ -56,6 +56,10 @@ Mendix-Sidecar, MPR-Validierung und identischen semantischen Vergleich:
 in SLATaskApp und zwei in RubyBridgeSandbox wurden nur in Kopien korrigiert;
 die übrigen elf Eingaben benötigten keine Reparatur.
 
+Dieses Gate validiert SLATaskAppNative außerdem aus einer temporären Kopie, deren
+`mprname` es benennt, weil sein `mprcontents/` zu SLATaskApp gehört, und meldet den
+Eigentümer als `contents_shared_with`.
+
 Dieses Gate beseitigte öffentliche Ruby-Leaks, die der strukturelle Roundtrip
 nicht erkannt hatte. Database-Connector-Mappings verwenden nun geordnete
 Parameterblöcke; schema-gestützte Pluggable-Skalare, Aktionen, XPath-Quellen

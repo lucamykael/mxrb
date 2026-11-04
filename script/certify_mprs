@@ -1,13 +1,13 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-require 'fileutils'
 require 'json'
 require 'optparse'
 require 'tmpdir'
 
 $LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 require_relative '../lib/mxrb'
+require_relative 'package_copy'
 
 options = { cycles: 2, repair_hashes: false }
 OptionParser.new do |parser|
@@ -21,24 +21,6 @@ end.parse!
 abort 'at least one MPR is required' if ARGV.empty?
 abort '--cycles must be greater than zero' unless options[:cycles].positive?
 
-# The name in mprcontents/mprname when it is not this MPR. The library refuses to
-# open such a project, because writing to it would corrupt the owner's contents.
-def contents_owner(source)
-  marker = File.join(File.dirname(source), 'mprcontents', 'mprname')
-  return unless File.file?(marker)
-
-  owner = File.read(marker).strip
-  owner unless owner == File.basename(source)
-end
-
-def copy_package(source, directory)
-  copy = File.join(directory, File.basename(source))
-  FileUtils.cp(source, copy)
-  contents = File.join(File.dirname(source), 'mprcontents')
-  FileUtils.cp_r(contents, directory) if File.directory?(contents)
-  copy
-end
-
 files = ARGV.map { File.expand_path(_1) }.uniq
 # rubocop:disable Metrics/BlockLength
 results = files.map do |source|
@@ -51,9 +33,8 @@ results = files.map do |source|
       current = source
       repairs = []
       valid = Mxrb.validate(current).valid?
-      if !valid && (owner = contents_owner(source))
-        current = copy_package(source, directory)
-        File.write(File.join(directory, 'mprcontents', 'mprname'), File.basename(source))
+      if !valid && (owner = PackageCopy.contents_owner(source))
+        current = PackageCopy.claim(source, directory)
         row[:contents_shared_with] = owner
         warn "[mxrb] #{row[:name]}: certifying a temporary copy, because mprcontents belongs to #{owner}"
         valid = Mxrb.validate(current).valid?
@@ -61,7 +42,7 @@ results = files.map do |source|
       unless valid
         raise 'original validation failed' unless options[:repair_hashes]
 
-        current = copy_package(source, directory) if current == source
+        current = PackageCopy.copy(source, directory) if current == source
         mpr = Mxrb::IO::MprFile.open(current, readonly: false)
         repairs = mpr.repair_content_hashes!
         mpr.close
