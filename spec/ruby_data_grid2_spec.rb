@@ -215,6 +215,17 @@ RSpec.describe 'Data grid 2 in the Ruby application' do # rubocop:disable Metric
     expect(bare.fetch(:options)).not_to include(:entity, :source)
   end
 
+  it 'reads the direction of a gallery sort as Studio Pro stores it' do
+    gallery_type = object_type('gallery', %w[datasource content])
+    source = { 'SortBar' => { 'SortItems' => [2, { 'AttributeRef' => { 'Attribute' => 'App.Item.Name' },
+                                                   'SortOrder' => 'Descending' }] } }
+    raw = widget_object(gallery_type, 'datasource' => { 'DataSource' => source })
+    page = Mxrb::Model::Page.allocate
+    gallery = page.send(:gallery_widget, 'Name' => 'items', 'Type' => { 'ObjectType' => gallery_type }, 'Object' => raw)
+
+    expect(gallery.dig(:options, :sort)).to eq([{ attribute: 'App.Item.Name', direction: 'Descending' }])
+  end
+
   it 'exports a list source as Ruby that evaluates to the same widget' do
     widget = stringify(source_grid(microflow_source))
     source = Mxrb::RubyApp::Exporter.allocate.send(:runtime_data_grid_source, widget, 0)

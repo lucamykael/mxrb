@@ -91,12 +91,16 @@ The comparator used for this matrix includes:
 - entities, native attribute metadata, access rules and associations;
 - pages and their complete deep widget/layout trees, events and data sources;
 - menus;
-- layouts, page templates, building blocks and snippets, as stored;
+- pages, layouts, page templates, building blocks and snippets, as stored;
 - microflow and nanoflow parameters, roles, objects, actions and edges.
 
 Stored documents are compared without their element identities, empty or false
-fields, null pointers, and the action a widget value stores when its property is not
-an action.
+fields, null pointers, and the action or text template a widget value stores when its
+property is not of that kind. Four forms that generators wrote count as what Studio
+Pro stores, because a rebuild writes them that way: a `Class` copying the appearance
+beside it, a sort item's `SortDirection` as `SortOrder`, a page without the `Autofocus`
+the schema defaults to `Off`, and the default marker on six collections. A change to a
+page appears twice, in its summary and as stored.
 
 UUIDs and visual canvas coordinates are normalized because regeneration may
 legitimately assign new identifiers or positions. Mendix names remain canonical

@@ -82,9 +82,14 @@ widgets deixaram de ser confundidos com identidade de unit.
 O comparador cobre metadados, segurança, árvore de units, entidades, access
 rules, associações, páginas, widgets, eventos, menus, layouts, page templates,
 building blocks, snippets e corpos completos de microflows/nanoflows. UUIDs e
-coordenadas visuais são normalizados. Esses documentos são comparados como foram
-gravados, sem as identidades de elementos, campos vazios ou falsos, ponteiros nulos
-e a ação que um valor de widget guarda quando sua propriedade não é uma ação.
+coordenadas visuais são normalizados. Páginas e esses documentos são comparados como
+foram gravados, sem as identidades de elementos, campos vazios ou falsos, ponteiros
+nulos e a ação ou o text template que um valor de widget guarda quando sua propriedade
+não é desse tipo. Quatro formas escritas por geradores contam como o que o Studio Pro
+grava, porque uma reconstrução as escreve assim: um `Class` que copia a appearance ao
+lado, o `SortDirection` de um item de ordenação como `SortOrder`, uma página sem o
+`Autofocus` cujo padrão no esquema é `Off`, e o marcador padrão em seis coleções. Uma
+mudança em uma página aparece duas vezes, no resumo e como gravada.
 
 Os 264 corpos de flows da matriz são emitidos como Ruby tipado. As 133 páginas
 contêm 1.304 nós de 25 tipos; estruturas profundas permanecem hashes Ruby
