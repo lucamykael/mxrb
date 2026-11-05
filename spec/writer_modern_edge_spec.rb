@@ -326,6 +326,18 @@ RSpec.describe Mxrb::Writer, 'modern storage edge contracts' do
     )
   end
 
+  it 'keeps a layout already stored in the shape of an older version' do
+    legacy = described_class.new('v6.mpr', version: '6.10.8', modules: [])
+    %w[Widget Widgets].each do |field|
+      stored = { '$Type' => 'Forms$Layout', 'Name' => 'Shell', 'LayoutType' => 'Phone', field => { 'Name' => 'keep' } }
+      mpr = double
+      expect(legacy).to receive(:upsert_native_unit).with(mpr, 'module-id', hash_including('doc' => stored))
+      legacy.send(
+        :write_native_documents, mpr, 'module-id', native_documents: [{ containment: 'Documents', doc: stored }]
+      )
+    end
+  end
+
   it 'removes donor image references from standalone navigation templates' do
     document = {
       'Profiles' => [2, {

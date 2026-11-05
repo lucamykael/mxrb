@@ -91,10 +91,12 @@ The comparator used for this matrix includes:
 - entities, native attribute metadata, access rules and associations;
 - pages and their complete deep widget/layout trees, events and data sources;
 - menus;
+- layouts, page templates, building blocks and snippets, as stored;
 - microflow and nanoflow parameters, roles, objects, actions and edges.
 
-Layout and snippet documents are not compared, so an identical result says nothing
-about their contents.
+Stored documents are compared without their element identities, empty or false
+fields, null pointers, and the action a widget value stores when its property is not
+an action.
 
 UUIDs and visual canvas coordinates are normalized because regeneration may
 legitimately assign new identifiers or positions. Mendix names remain canonical

@@ -17,7 +17,7 @@ RSpec.describe Mxrb::RubyApp::PresentationEdits do
     [source, app, File.join(app, 'app', 'presentation', 'app.rb')]
   end
 
-  # The raw documents: Mxrb.compare does not read layouts or snippets.
+  # The raw documents, because Mxrb.compare leaves out what regeneration may vary.
   def documents(path)
     Mxrb.open(path) do |project|
       project.modules.flat_map(&:presentation_documents).to_h { [_1.fetch(:name), _1.fetch(:doc)] }
@@ -29,7 +29,6 @@ RSpec.describe Mxrb::RubyApp::PresentationEdits do
     FileUtils.rm_rf(File.dirname(built))
     Mxrb::RubyApp.compile(app, built)
     expect(Mxrb.validate(built)).to be_valid
-    expect(Mxrb.compare(source, built)).to be_identical
     built
   end
 

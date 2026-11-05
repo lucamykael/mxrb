@@ -80,10 +80,11 @@ widgets deixaram de ser confundidos com identidade de unit.
 ## Cobertura profunda editável
 
 O comparador cobre metadados, segurança, árvore de units, entidades, access
-rules, associações, páginas, widgets, eventos, menus e corpos completos de
-microflows/nanoflows. UUIDs e coordenadas visuais são normalizados.
-Documentos de layout e snippet não são comparados, então um resultado idêntico não
-diz nada sobre o conteúdo deles.
+rules, associações, páginas, widgets, eventos, menus, layouts, page templates,
+building blocks, snippets e corpos completos de microflows/nanoflows. UUIDs e
+coordenadas visuais são normalizados. Esses documentos são comparados como foram
+gravados, sem as identidades de elementos, campos vazios ou falsos, ponteiros nulos
+e a ação que um valor de widget guarda quando sua propriedade não é uma ação.
 
 Os 264 corpos de flows da matriz são emitidos como Ruby tipado. As 133 páginas
 contêm 1.304 nós de 25 tipos; estruturas profundas permanecem hashes Ruby

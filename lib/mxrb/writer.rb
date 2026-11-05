@@ -2360,7 +2360,7 @@ module Mxrb
               else
                 stringify_keys(document.fetch(:doc))
               end
-        doc = legacy_layout_doc(doc) if doc['$Type'] == 'Forms$Layout' && legacy_layout?
+        doc = legacy_layout_doc(doc) if doc['$Type'] == 'Forms$Layout' && legacy_layout? && !legacy_layout_stored?(doc)
         existing = native_document_target(mpr, module_id, document, doc)
         requested_container = document[:container_id]
         target_container = if requested_container && mpr.unit(requested_container)
@@ -2413,6 +2413,9 @@ module Mxrb
     def legacy_layout?
       @definition.fetch(:version).to_i < 9
     end
+
+    # A layout exported from an older model already has that version's content.
+    def legacy_layout_stored?(document) = document.key?('Widget') || document.key?('Widgets')
 
     def legacy_layout_doc(source)
       placeholder = {
