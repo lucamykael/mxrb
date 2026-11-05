@@ -30,6 +30,27 @@ module Mxrb
         FileUtils.cp(source_path, path)
       end
 
+      # A value as JSON, without the element identities. Declarations of unsupported
+      # structures generate those each time they are evaluated, and they are not edits.
+      def self.comparable(value)
+        case value
+        when Hash then value.to_h { [_1.to_s, comparable(_2)] }.except('$ID')
+        when Array then value.map { comparable(_1) }
+        else JSON.parse(JSON.generate(value))
+        end
+      end
+
+      # Under the same contexts as the application's own sources.
+      def self.evaluate(manifest, path)
+        SourceIdentity.with(manifest) do |identities|
+          PageDesignIdentity.with(manifest) do
+            PluggableProperties.with(manifest) do
+              RubyApp.with_native_fragments(manifest.root) { identities.load_file(path) { load path, true } }
+            end
+          end
+        end
+      end
+
       def initialize(project, manifest)
         @project = project
         @manifest = manifest
@@ -76,8 +97,8 @@ module Mxrb
           title: page.title.to_s, appearance_class: page.appearance_class.to_s,
           appearance_style: page.appearance_style.to_s,
           allowed_module_roles: Array(page.allowed_module_roles).map(&:to_s),
-          data_source: JSON.parse(JSON.generate(page.data_source)),
-          widgets: JSON.parse(JSON.generate(page.widgets))
+          data_source: self.class.comparable(page.data_source),
+          widgets: self.class.comparable(page.widgets)
         }
       end
 
@@ -85,21 +106,10 @@ module Mxrb
       def baseline_page(entry)
         registered = Registry.snapshot
         Registry.reset!
-        evaluate(self.class.baseline_path(@root, entry.fetch('id')))
+        self.class.evaluate(@manifest, self.class.baseline_path(@root, entry.fetch('id')))
         Registry.fetch(:page, entry.fetch('name'))
       ensure
         Registry.restore!(registered)
-      end
-
-      # Under the same contexts as the application's own sources.
-      def evaluate(path)
-        SourceIdentity.with(@manifest) do |identities|
-          PageDesignIdentity.with(@manifest) do
-            PluggableProperties.with(@manifest) do
-              RubyApp.with_native_fragments(@root) { identities.load_file(path) { load path, true } }
-            end
-          end
-        end
       end
 
       def unsupported!(page, reason) = raise(UnsupportedEdit, "#{page}: #{reason}")

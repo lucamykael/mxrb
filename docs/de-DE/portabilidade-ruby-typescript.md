@@ -22,9 +22,13 @@ Umbenennen der Seite. Kommentare und Formatierung ändern nichts.
 Das React-Frontend liest dasselbe Ruby. Ein Projekt ohne Basen, das davor exportiert
 wurde, behält seine Dokumente bis zum nächsten Export, und
 `.mxrb/preserve_native_pages` schaltet dies für ein Projekt ab, das reine
-Runtime-Seiten behält. Layouts und Snippets in `app/presentation/` sind nicht
-abgedeckt. Ein mit Studio Pro verknüpftes Projekt synchronisiert über `project.rb`,
+Runtime-Seiten behält. Ein mit Studio Pro verknüpftes Projekt synchronisiert über `project.rb`,
 dessen Seitendeklarationen die Quelle des Dokuments sind.
+
+Layouts und Snippets in `app/presentation/` folgen denselben Regeln, mit Basen in
+`.mxrb/presentation_baselines/`. Das Ändern der Parameter oder Variablen eines Snippets
+lässt die Kompilierung fehlschlagen, ebenso das Bearbeiten eines Menüs, Bildes oder
+Symbols sowie das Hinzufügen oder Entfernen einer Deklaration.
 
 ## OQL-Prädikate: `LIKE`, `IN`, `DISTINCT` und `HAVING`
 

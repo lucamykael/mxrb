@@ -21,9 +21,13 @@ change nothing.
 The React frontend reads the same Ruby. A project without baselines, exported
 before this existed, keeps its documents unchanged until it is exported again, and
 `.mxrb/preserve_native_pages` turns this off for a project that keeps runtime-only
-pages. Layouts and snippets in `app/presentation/` are not covered. A project
-linked to Studio Pro synchronizes through `project.rb`, whose page declarations
+pages. A project linked to Studio Pro synchronizes through `project.rb`, whose page declarations
 are the source of the document.
+
+Layouts and snippets in `app/presentation/` follow the same rules, with baselines
+in `.mxrb/presentation_baselines/`. Changing a snippet's parameters or variables
+fails the compilation, as does editing a menu, image or icon, or adding or removing
+a declaration.
 
 ## Native mobile pages, widgets and actions
 

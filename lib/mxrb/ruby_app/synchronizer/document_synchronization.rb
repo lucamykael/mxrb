@@ -245,6 +245,7 @@ module Mxrb
           return if File.exist?(File.join(@root, '.mxrb', 'preserve_native_pages'))
 
           PageEdits.new(project, @manifest).apply!
+          PresentationEdits.new(project, @manifest).apply!
         end
 
         def synchronize_native_documents(project)

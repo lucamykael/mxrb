@@ -82,6 +82,8 @@ widgets deixaram de ser confundidos com identidade de unit.
 O comparador cobre metadados, segurança, árvore de units, entidades, access
 rules, associações, páginas, widgets, eventos, menus e corpos completos de
 microflows/nanoflows. UUIDs e coordenadas visuais são normalizados.
+Documentos de layout e snippet não são comparados, então um resultado idêntico não
+diz nada sobre o conteúdo deles.
 
 Os 264 corpos de flows da matriz são emitidos como Ruby tipado. As 133 páginas
 contêm 1.304 nós de 25 tipos; estruturas profundas permanecem hashes Ruby

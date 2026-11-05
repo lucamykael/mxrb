@@ -93,6 +93,9 @@ The comparator used for this matrix includes:
 - menus;
 - microflow and nanoflow parameters, roles, objects, actions and edges.
 
+Layout and snippet documents are not compared, so an identical result says nothing
+about their contents.
+
 UUIDs and visual canvas coordinates are normalized because regeneration may
 legitimately assign new identifiers or positions. Mendix names remain canonical
 in the semantic snapshot; Ruby filename and identifier formatting is not used

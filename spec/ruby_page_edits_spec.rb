@@ -169,6 +169,14 @@ RSpec.describe Mxrb::RubyApp::PageEdits do
     end
   end
 
+  describe '.comparable' do
+    it 'reads a value as JSON and drops element identities at any depth' do
+      value = { '$ID': 'a', name: :text, rows: [{ '$ID' => 'b', 'count' => 1 }, nil] }
+
+      expect(described_class.comparable(value)).to eq('name' => 'text', 'rows' => [{ 'count' => 1 }, nil])
+    end
+  end
+
   describe 'the portability report' do
     it 'reports an exported page as native' do
       _source, app, = export_project(@directory)
