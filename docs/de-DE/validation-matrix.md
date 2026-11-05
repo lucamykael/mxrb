@@ -65,9 +65,9 @@ Male ein identisches Ergebnis. Der erste Aufbau entfernt das Mendix-Sidecar und
 startet von der Runtime-Kopie des ursprünglichen MPR; er zeigt, dass das öffentliche
 Paket ohne Sidecar kompiliert. Der zweite entfernt diese Kopie und startet vom
 Sidecar; er zeigt, dass dessen Ruby und seine erhaltenen nativen Units das Modell
-wiederherstellen. 13/13 Projekte bestehen beide. Keiner zeigt, dass Änderungen in
-`app/pages/*.rb` das Modell erreichen: Nur eine Seite, die `native` deklariert, wird
-synchronisiert, und `mxrb portability` meldet die übrigen als `runtime_only`.
+wiederherstellen. 13/13 Projekte bestehen beide. Keiner betrifft Änderungen: Die
+Kompilierung überträgt Änderungen in `app/pages/*.rb` auf die Seitendokumente, wie die
+[Portabilität](portabilidade-ruby-typescript.md#exportierte-seiten-bearbeiten) beschreibt.
 
 Dieses Gate beseitigte öffentliche Ruby-Leaks, die der strukturelle Roundtrip
 nicht erkannt hatte. Database-Connector-Mappings verwenden nun geordnete

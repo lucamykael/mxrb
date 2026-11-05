@@ -241,6 +241,12 @@ module Mxrb
           end
         end
 
+        def synchronize_page_edits(project)
+          return if File.exist?(File.join(@root, '.mxrb', 'preserve_native_pages'))
+
+          PageEdits.new(project, @manifest).apply!
+        end
+
         def synchronize_native_documents(project)
           services = Registry.all(:service).values.select(&:native_definition)
           pages = if File.exist?(File.join(@root, '.mxrb', 'preserve_native_pages'))

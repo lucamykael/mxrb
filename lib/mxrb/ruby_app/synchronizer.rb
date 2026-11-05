@@ -43,6 +43,7 @@ module Mxrb
         synchronize_entity_behaviors(project)
         prune_constants(project)
         prune_enumerations(project)
+        synchronize_page_edits(project)
         synchronize_native_documents(project)
         synchronize_scheduled_events(project)
         @source_identities.reconcile!(project)

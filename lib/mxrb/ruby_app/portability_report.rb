@@ -70,6 +70,8 @@ module Mxrb
         return ['native', "Ruby #{kind} declares a native Mendix projection"] \
           if implementation&.native_definition
         return ['native', 'Editable Ruby declaration rebuilds this Mendix document'] if bidirectional?(coverage)
+        return ['native', 'Edits to this Ruby page are applied to its Mendix document, or fail the compilation'] \
+          if kind == 'page' && PageEdits.baseline?(@manifest.root, coverage['id'])
 
         fallback_portability(coverage, kind)
       end

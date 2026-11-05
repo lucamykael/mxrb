@@ -1,5 +1,31 @@
 # Echte Portabilität zwischen Ruby, TypeScript und Mendix
 
+## Exportierte Seiten bearbeiten
+
+Eine nach `app/pages/*.rb` exportierte Seite ist eine schlankere Projektion ihres
+Mendix-Dokuments. Die Kompilierung überträgt Ihre Änderungen deshalb auf das Dokument,
+statt es neu aufzubauen. Der Export bewahrt den Quelltext jeder Seite in
+`.mxrb/page_baselines/` auf. Eine Seite, die ihrer Basis entspricht, lässt das Dokument
+unberührt. Andernfalls wertet die Kompilierung beide Fassungen aus und überträgt nur
+die Unterschiede:
+
+- den Titel sowie Klasse und Stil der Seite oder eines Widgets;
+- die Beschriftung eines Widgets in den Übersetzungen, die den alten Text enthielten.
+  Andere Sprachen bleiben unverändert; prüfen Sie sie nach einer Änderung;
+- das Entfernen eines Widgets und das Umordnen von Widgets desselben Elternelements.
+
+Jede andere Änderung lässt die Kompilierung fehlschlagen und nennt Seite und Feld: ein
+Widget hinzufügen oder in ein anderes Elternelement verschieben, Rollen, die
+Datenquelle, weitere Widget-Optionen wie Grid-Spalten sowie das Entfernen oder
+Umbenennen der Seite. Kommentare und Formatierung ändern nichts.
+
+Das React-Frontend liest dasselbe Ruby. Ein Projekt ohne Basen, das davor exportiert
+wurde, behält seine Dokumente bis zum nächsten Export, und
+`.mxrb/preserve_native_pages` schaltet dies für ein Projekt ab, das reine
+Runtime-Seiten behält. Layouts und Snippets in `app/presentation/` sind nicht
+abgedeckt. Ein mit Studio Pro verknüpftes Projekt synchronisiert über `project.rb`,
+dessen Seitendeklarationen die Quelle des Dokuments sind.
+
 ## OQL-Prädikate: `LIKE`, `IN`, `DISTINCT` und `HAVING`
 
 Views und tabellarische Abfragen akzeptieren `LIKE`/`NOT LIKE` mit `%` und `_`

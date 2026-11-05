@@ -64,9 +64,9 @@ idêntico nas duas. A primeira reconstrução remove o sidecar Mendix e parte da
 de runtime do MPR original, mostrando que o pacote público compila sem o sidecar. A
 segunda remove essa cópia e parte do sidecar, mostrando que o Ruby do sidecar e
 suas unidades nativas preservadas reconstroem o modelo. 13/13 projetos passam nas
-duas. Nenhuma mostra que edições em `app/pages/*.rb` chegam ao modelo: só uma página
-que declara `native` é sincronizada, e o `mxrb portability` informa as demais como
-`runtime_only`.
+duas. Nenhuma envolve edições: a compilação aplica edições em `app/pages/*.rb` aos
+documentos das páginas, como descreve a
+[portabilidade](portabilidade-ruby-typescript.md#editar-páginas-exportadas).
 
 Esse gate encontrou e corrigiu vazamentos que o round-trip estrutural não
 detectava. Mapeamentos do Database Connector agora usam blocos de parâmetros
