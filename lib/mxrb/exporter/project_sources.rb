@@ -292,6 +292,8 @@ module Mxrb
         args << "microflow: #{ruby(item[:microflow])}" if item[:microflow]
         args << "icon: #{ruby(item[:icon])}" if item[:icon]
         args << "translations: #{ruby(translations)}" unless translations.empty?
+        action = item.slice(*Dsl::NavigationMenuItemBuilder::ACTION_OPTIONS)
+        args.concat(action.map { |key, value| "#{key}: #{ruby(value)}" })
         children = item.fetch(:items, [])
         return ["#{pad}item #{args.join(', ')}"] if children.empty?
 

@@ -91,10 +91,11 @@ verglichen, ohne Element-Identitäten, leere oder falsche Felder, Null-Zeiger un
 Aktion oder das Text Template, die ein Widget-Wert speichert, wenn seine Eigenschaft
 nicht von dieser Art ist. Vier von Generatoren geschriebene Formen gelten als das, was
 Studio Pro speichert, weil ein Neuaufbau sie so schreibt: ein `Class`, das die
-Appearance daneben kopiert, das `SortDirection` eines Sortierelements als `SortOrder`,
-eine Seite ohne das `Autofocus`, dessen Schema-Standard `Off` ist, und der
-Standardmarker bei sechs Sammlungen. Eine Änderung an einer Seite erscheint zweimal,
-in der Zusammenfassung und wie gespeichert.
+Appearance daneben kopiert, ein Sortierelement ohne `SortOrder` als aufsteigend, egal
+was sein `SortDirection` sagt, weil MxBuild dieses Feld ignoriert, eine Seite ohne das
+`Autofocus`, dessen Schema-Standard `Off` ist, und der Standardmarker bei sechs
+Sammlungen. Eine Änderung an einer Seite erscheint zweimal, in der Zusammenfassung und
+wie gespeichert. Auch das Navigationsdokument wird wie gespeichert verglichen.
 
 ## Offizielle Gates
 

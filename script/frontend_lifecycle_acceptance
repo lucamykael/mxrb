@@ -188,6 +188,8 @@ module MxrbFrontendLifecycleAcceptance
         "#{home}.title",
         "#{home}.widgets.pageHeader.children.pageTitle.options.caption",
         "modules.#{MODULE_NAME}.pages.Orders",
+        'navigation.document.Profiles.1.AppTitle.Items.1.Text',
+        'navigation.document.Profiles.1.Menu.Items',
         'navigation.profiles.Responsive.app_title.en_US',
         'navigation.profiles.Responsive.items.0'
       ]

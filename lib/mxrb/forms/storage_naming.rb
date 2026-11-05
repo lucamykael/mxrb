@@ -76,6 +76,11 @@ module Mxrb
       }.transform_keys(&:freeze).freeze
       private_constant :LEGACY_ALIASES
 
+      # MxBuild ignores these names when a generator stores them, so reading them
+      # would change what the model does.
+      IGNORED_NAMES = { %w[GridSortItem sortDirection] => 'SortDirection' }.transform_keys(&:freeze).freeze
+      private_constant :IGNORED_NAMES
+
       module_function
 
       def resolve(property)
@@ -87,12 +92,14 @@ module Mxrb
         end
       end
 
+      def ignored_name(property) = IGNORED_NAMES[[property.declared_by, property.name]]
+
       def candidates(property)
         [
           resolve(property).name,
           LEGACY_ALIASES[[property.declared_by, property.name]],
           pascal_case(property.name)
-        ].compact.uniq.freeze
+        ].compact.uniq.reject { _1 == ignored_name(property) }.freeze
       end
 
       def pascal_case(name)

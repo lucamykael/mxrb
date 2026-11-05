@@ -87,9 +87,9 @@ module Mxrb
         }.compact
       end
 
-      def item(caption, page: nil, microflow: nil, icon: nil, translations: {}, &block)
+      def item(caption, page: nil, microflow: nil, icon: nil, translations: {}, **action, &block)
         builder = NavigationMenuItemBuilder.new(
-          caption, page:, microflow:, icon:, translations:
+          caption, page:, microflow:, icon:, translations:, **action
         )
         builder.instance_eval(&block) if block
         @items << builder.to_h
@@ -148,7 +148,16 @@ module Mxrb
     end
 
     class NavigationMenuItemBuilder
-      def initialize(caption, page: nil, microflow: nil, icon: nil, translations: {})
+      ACTION_OPTIONS = %i[
+        location title disabled_during_execution form_validations progress_bar progress_message
+        asynchronous use_all_pages confirmation
+      ].freeze
+
+      def initialize(caption, page: nil, microflow: nil, icon: nil, translations: {}, **action)
+        unknown = action.keys - ACTION_OPTIONS
+        raise ArgumentError, "unknown navigation item option #{unknown.first.inspect}" unless unknown.empty?
+
+        @action = action
         @caption = normalize_caption(caption)
         @caption.merge!(translations.to_h.transform_keys(&:to_s).transform_values(&:to_s))
         @page = page&.to_s
@@ -157,8 +166,8 @@ module Mxrb
         @items = []
       end
 
-      def item(caption, page: nil, microflow: nil, icon: nil, translations: {}, &block)
-        child = self.class.new(caption, page:, microflow:, icon:, translations:)
+      def item(caption, page: nil, microflow: nil, icon: nil, translations: {}, **action, &block)
+        child = self.class.new(caption, page:, microflow:, icon:, translations:, **action)
         child.instance_eval(&block) if block
         @items << child.to_h
       end
@@ -166,7 +175,7 @@ module Mxrb
       def to_h
         {
           caption: @caption, page: @page, microflow: @microflow,
-          icon: @icon, items: @items
+          icon: @icon, items: @items, **@action
         }
       end
 

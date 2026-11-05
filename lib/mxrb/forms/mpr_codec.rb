@@ -281,6 +281,8 @@ module Mxrb
               next
             end
           end
+          ignored = StorageNaming.ignored_name(property)
+          consumed << ignored if ignored
           storage = StorageNaming.candidates(property).find { document.key?(_1) } ||
                     StorageNaming.resolve(property).name
           if legacy_source_variable?(schema_type, property, document)

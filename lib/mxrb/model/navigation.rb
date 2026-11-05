@@ -75,9 +75,71 @@ module Mxrb
       end
     end
 
+    # A navigation icon as Studio Pro stores it: a glyph code, an icon of a
+    # collection or an image.
+    module NavigationIcon
+      private
+
+      def icon(value)
+        return unless value.is_a?(Hash)
+        return { collection: value['Image'].to_s } if value['$Type'] == 'Forms$IconCollectionIcon'
+        return { image: value['Image'].to_s } if value['$Type'] == 'Forms$ImageIcon'
+
+        value['Code']
+      end
+    end
+
+    # The settings of a menu item's action, leaving out what Studio Pro stores by default.
+    module NavigationItemAction
+      MICROFLOW_OPTIONS = {
+        form_validations: %w[FormValidations All], progress_bar: %w[ProgressBar None],
+        asynchronous: ['Asynchronous', false], use_all_pages: ['UseAllPages', false]
+      }.freeze
+
+      private
+
+      def action_target(action)
+        { page: reference(action.dig('FormSettings', 'Form')),
+          microflow: reference(action.dig('MicroflowSettings', 'Microflow')) }
+      end
+
+      def action_options(action)
+        options = action['DisabledDuringExecution'] == true ? { disabled_during_execution: true } : {}
+        options.merge(page_options(action['FormSettings'])).merge(microflow_options(action['MicroflowSettings']))
+      end
+
+      def page_options(settings)
+        return {} unless settings.is_a?(Hash)
+
+        title = settings['TitleOverride'] || settings['FormTitle']
+        { location: settings['Location'], title: (text_translations(title['Text'] || title) if title) }.compact
+      end
+
+      def microflow_options(settings)
+        return {} unless settings.is_a?(Hash)
+
+        MICROFLOW_OPTIONS.each_with_object(microflow_text_options(settings)) do |(key, (field, default)), values|
+          values[key] = settings[field] unless settings[field].nil? || settings[field] == default
+        end
+      end
+
+      def microflow_text_options(settings)
+        message, confirmation = settings.values_at('ProgressMessage', 'ConfirmationInfo')
+        { progress_message: (text_translations(message) if message),
+          confirmation: (confirmation_options(confirmation) if confirmation) }.compact
+      end
+
+      def confirmation_options(confirmation)
+        { question: 'Question', proceed: 'ProceedButtonCaption', cancel: 'CancelButtonCaption' }
+          .transform_values { text_translations(confirmation[_1]) }
+      end
+    end
+
     # Typed view of one navigation profile, including recursive menu items.
     class NavigationProfile
       include OfflineEntityConfigs
+      include NavigationIcon
+      include NavigationItemAction
 
       attr_reader :raw_document
 
@@ -195,12 +257,9 @@ module Mxrb
       def navigation_item(item)
         action = item['Action'].is_a?(Hash) ? item['Action'] : {}
         {
-          caption: text_translations(item['Caption']),
-          page: reference(action.dig('FormSettings', 'Form')),
-          microflow: reference(action.dig('MicroflowSettings', 'Microflow')),
-          icon: item.dig('Icon', 'Code'),
+          caption: text_translations(item['Caption']), **action_target(action), icon: icon(item['Icon']),
           items: items(item['Items']).map { navigation_item(_1) }
-        }.compact
+        }.compact.merge(action_options(action))
       end
     end
 
@@ -208,6 +267,7 @@ module Mxrb
     # home pages and bottom bar items instead of a web menu.
     class NativeNavigationProfile
       include OfflineEntityConfigs
+      include NavigationIcon
 
       TYPE = 'Navigation$NativeNavigationProfile'
       SETTINGS = {
@@ -284,13 +344,6 @@ module Mxrb
         return {} unless text.is_a?(Hash)
 
         items(text['Items']).to_h { [_1['LanguageCode'].to_s, _1['Text'].to_s] }
-      end
-
-      def icon(value)
-        return unless value.is_a?(Hash)
-        return { collection: value['Image'].to_s } if value['$Type'] == 'Forms$IconCollectionIcon'
-
-        value['Code']
       end
     end
   end

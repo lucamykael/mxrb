@@ -55,12 +55,16 @@ module Mxrb
               format_version: project.format_version
             },
             security: security_summary(project),
-            navigation: normalize_hash(project.navigation.to_h),
+            navigation: navigation_summary(project.navigation),
             design_assets: design_asset_summary(project),
             units: unit_summary(project),
             modules: project.modules.sort_by(&:name).map { module_summary(_1) }
           }
         end
+      end
+
+      def navigation_summary(navigation)
+        normalize_hash(navigation.to_h).merge(document: stored_document(navigation.raw_document))
       end
 
       def design_asset_summary(project)
@@ -264,9 +268,8 @@ module Mxrb
 
       def with_sort_order(value)
         return value unless value['$Type'] == 'Forms$GridSortItem'
-        return value if value.key?('SortOrder') || !value.key?('SortDirection')
 
-        value.except('SortDirection').merge('SortOrder' => value['SortDirection'])
+        value.except('SortDirection').merge('SortOrder' => value['SortOrder'] || 'Ascending')
       end
 
       def studio_marker(type, key, entry)

@@ -692,7 +692,7 @@ RSpec.describe Mxrb::Writer, 'remaining edge contracts' do
       .to eq(%w[Ascending Descending])
     items.each { _1['SortDirection'] = _1.delete('SortOrder') }
     expect(page.send(:pluggable_data_source, source).fetch(:sort).map { _1.fetch(:direction) })
-      .to eq(%w[Ascending Descending])
+      .to eq(%w[Ascending Ascending])
   end
 
   it 'covers OQL, generalization, page context, and legacy widget alternatives' do
