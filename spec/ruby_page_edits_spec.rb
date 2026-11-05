@@ -74,19 +74,22 @@ RSpec.describe Mxrb::RubyApp::PageEdits do
     it 'applies a title' do
       differences = differences_after(@directory) { _1.sub('title: "Welcome"', 'title: "Hello"') }
 
-      expect(differences).to contain_exactly(a_string_including('pages.Home.title', '"Welcome"', '"Hello"'))
+      expect(differences).to contain_exactly(a_string_including('pages.Home.title', '"Welcome"', '"Hello"'),
+                                             a_string_including('pages.Home.document.Title', '"Welcome"', '"Hello"'))
     end
 
     it 'applies a caption, including one inside a container' do
       differences = differences_after(@directory) { _1.sub('caption: "Inside"', 'caption: "Edited"') }
 
-      expect(differences).to contain_exactly(a_string_including('inner', '"Inside"', '"Edited"'))
+      expect(differences).to contain_exactly(a_string_including('inner', '"Inside"', '"Edited"'),
+                                             a_string_including('document', '"Inside"', '"Edited"'))
     end
 
     it 'applies a widget class' do
       differences = differences_after(@directory) { _1.sub('class_name: "plain"', 'class_name: "fancy"') }
 
-      expect(differences).to contain_exactly(a_string_including('message', '"plain"', '"fancy"'))
+      expect(differences).to contain_exactly(a_string_including('message', '"plain"', '"fancy"'),
+                                             a_string_including('document', '"plain"', '"fancy"'))
     end
 
     it 'removes a widget, even the last one of its parent' do
@@ -120,7 +123,8 @@ RSpec.describe Mxrb::RubyApp::PageEdits do
       Mxrb::RubyApp.compile(app, built)
 
       expect(Mxrb.compare(source, built).differences.map(&:to_s))
-        .to contain_exactly(a_string_including('pages.Home.title', '"Moved"'))
+        .to contain_exactly(a_string_including('pages.Home.title', '"Moved"'),
+                            a_string_including('pages.Home.document.Title', '"Moved"'))
     end
 
     it 'skips edits when the project asks to preserve its native pages' do

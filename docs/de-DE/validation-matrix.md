@@ -86,9 +86,15 @@ Zugriffsregeln, Beziehungen, Seiten, Widgets, Events, Menüs und vollständige
 Microflow-/Nanoflow-Körper. 264 Flow-Körper und 1.304 Seitenknoten aus 25 Typen
 sind als bearbeitbares Ruby repräsentiert. Jede native Unit besitzt zusätzlich
 einen vollständigen bearbeitbaren Eintrag in `.mxrb/native_units.rb`.
-Layouts, Page Templates, Building Blocks und Snippets werden wie gespeichert
+Seiten, Layouts, Page Templates, Building Blocks und Snippets werden wie gespeichert
 verglichen, ohne Element-Identitäten, leere oder falsche Felder, Null-Zeiger und die
-Aktion, die ein Widget-Wert speichert, wenn seine Eigenschaft keine Aktion ist.
+Aktion oder das Text Template, die ein Widget-Wert speichert, wenn seine Eigenschaft
+nicht von dieser Art ist. Vier von Generatoren geschriebene Formen gelten als das, was
+Studio Pro speichert, weil ein Neuaufbau sie so schreibt: ein `Class`, das die
+Appearance daneben kopiert, das `SortDirection` eines Sortierelements als `SortOrder`,
+eine Seite ohne das `Autofocus`, dessen Schema-Standard `Off` ist, und der
+Standardmarker bei sechs Sammlungen. Eine Änderung an einer Seite erscheint zweimal,
+in der Zusammenfassung und wie gespeichert.
 
 ## Offizielle Gates
 

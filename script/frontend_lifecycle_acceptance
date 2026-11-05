@@ -177,13 +177,16 @@ module MxrbFrontendLifecycleAcceptance
     end
 
     def assert_planned_diff(diff)
+      home = "modules.#{MODULE_NAME}.pages.Home"
       allowed = [
         'design_assets.theme/web/frontend-lifecycle.css',
         "modules.#{MODULE_NAME}.entities.Order",
         "modules.#{MODULE_NAME}.microflows.ACT_CreateOrder",
         "modules.#{MODULE_NAME}.nanoflows.NAN_RefreshOrders",
-        "modules.#{MODULE_NAME}.pages.Home.title",
-        "modules.#{MODULE_NAME}.pages.Home.widgets.pageHeader.children.pageTitle.options.caption",
+        "#{home}.document.FormCall.Arguments.1.Widgets.1.Widgets.1.Content.Template.Items.1.Text",
+        "#{home}.document.Title.Items.1.Text",
+        "#{home}.title",
+        "#{home}.widgets.pageHeader.children.pageTitle.options.caption",
         "modules.#{MODULE_NAME}.pages.Orders",
         'navigation.profiles.Responsive.app_title.en_US',
         'navigation.profiles.Responsive.items.0'

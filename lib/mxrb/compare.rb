@@ -18,6 +18,18 @@ module Mxrb
     end
 
     class Comparator
+      # Generators stored these collections with the default marker. Studio Pro stores
+      # the marker here in every project of the corpus, and a rebuild writes it.
+      STUDIO_COLLECTION_MARKERS = {
+        %w[Forms$CallNanoflowClientAction ParameterMappings] => 2,
+        %w[Forms$CompoundDesignPropertyValue Properties] => 2,
+        %w[Forms$DivContainer Widgets] => 2,
+        %w[Forms$GridSortBar SortItems] => 2,
+        %w[Forms$MicroflowSettings ParameterMappings] => 2,
+        %w[Forms$Page AllowedModuleRoles] => 1
+      }.freeze
+      private_constant :STUDIO_COLLECTION_MARKERS
+
       def initialize(left_path, right_path)
         @left_path = left_path
         @right_path = right_path
@@ -174,7 +186,8 @@ module Mxrb
           layout: page.layout_id,
           allowed_roles: page.allowed_module_roles.sort,
           data_source: normalize_hash(page.data_source),
-          widgets: page.widgets.map { widget_summary(_1) }
+          widgets: page.widgets.map { widget_summary(_1) },
+          document: stored_document(page.raw_document)
         }
       end
 
@@ -195,18 +208,20 @@ module Mxrb
       end
 
       def presentation_document_summary(document)
-        doc = document.fetch(:doc)
         { name: document.fetch(:name), type: document.fetch(:type),
-          document: normalized_document(doc, widget_value_kinds(doc)) }
+          document: stored_document(document.fetch(:doc)) }
       end
+
+      def stored_document(doc) = normalized_document(doc, widget_value_kinds(doc))
 
       # The stored document without what regeneration may vary or does not use: element
       # identities, the values pointing at them, and fields that are empty or false.
       def normalized_document(value, kinds)
         case value
         when Hash
-          without_unused_action(value, kinds).to_h { [_1.to_s, normalized_document(_2, kinds)] }
-                                             .except('$ID').reject { |_key, entry| absent_field?(entry) }
+          fields = canonical_fields(without_unused_values(value, kinds))
+          fields.to_h { [_1.to_s, normalized_document(_2, kinds)] }
+                .except('$ID').reject { |_key, entry| absent_field?(entry) }
         when Array then value.map { normalized_document(_1, kinds) }
         when BSON::Binary then null_pointer?(value) ? nil : :identity
         else value
@@ -220,12 +235,43 @@ module Mxrb
 
       def null_pointer?(value) = value.data.bytes.all?(&:zero?)
 
-      # Every widget value stores an action, which only an action property uses.
-      def without_unused_action(value, kinds)
+      # Every widget value stores an action and a text template, which only a property of
+      # that kind uses.
+      def without_unused_values(value, kinds)
         return value unless value['$Type'] == 'CustomWidgets$WidgetProperty' && value['Value'].is_a?(Hash)
-        return value if kinds[IO::BsonCodec.extract_id(value['TypePointer'])] == 'Action'
 
-        value.merge('Value' => value['Value'].except('Action'))
+        kind = kinds[IO::BsonCodec.extract_id(value['TypePointer'])]
+        value.merge('Value' => value['Value'].except(*(%w[Action TextTemplate] - [kind])))
+      end
+
+      # Generators wrote some fields in a way Studio Pro does not, and a rebuild writes
+      # them Studio Pro's way: a class also stored next to the appearance that holds it, a
+      # sort item's direction under its enumeration name, a page without the autofocus the
+      # schema defaults, and a default collection marker.
+      def canonical_fields(value)
+        fields = with_sort_order(value.except(*class_copy(value), *default_autofocus(value)))
+        fields.to_h { |key, entry| [key, studio_marker(value['$Type'], key, entry)] }
+      end
+
+      def class_copy(value)
+        appearance = value['Appearance']
+        appearance.is_a?(Hash) && value['Class'] == appearance['Class'] ? ['Class'] : []
+      end
+
+      def default_autofocus(value)
+        value['$Type'] == 'Forms$Page' && value['Autofocus'] == 'Off' ? ['Autofocus'] : []
+      end
+
+      def with_sort_order(value)
+        return value unless value['$Type'] == 'Forms$GridSortItem'
+        return value if value.key?('SortOrder') || !value.key?('SortDirection')
+
+        value.except('SortDirection').merge('SortOrder' => value['SortDirection'])
+      end
+
+      def studio_marker(type, key, entry)
+        marker = STUDIO_COLLECTION_MARKERS[[type, key.to_s]]
+        marker && entry.is_a?(Array) ? [marker, *entry.drop(1)] : entry
       end
 
       def widget_value_kinds(value, kinds = {})
