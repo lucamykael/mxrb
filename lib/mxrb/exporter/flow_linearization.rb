@@ -276,6 +276,20 @@ module Mxrb
         branches.size >= 2 && branches.all? { by_id.key?(_1['DestinationPointer']) }
       end
 
+      # Returning a variable by name also names the flow's return variable after it, so a
+      # flow that stores another name returns the variable as an expression.
+      def returned_as_variable?(variable)
+        @flow_return_variable.nil? || @flow_return_variable == variable
+      end
+
+      def with_flow_return_variable(flow)
+        previous = @flow_return_variable
+        @flow_return_variable = flow.respond_to?(:return_variable_name) ? flow.return_variable_name.to_s : nil
+        yield
+      ensure
+        @flow_return_variable = previous
+      end
+
       def body_dsl_lines(objects, flows, indent = 2, nested: false, endpoint_refs: nil,
                          emitted_refs: nil)
         return [] if objects.empty?
@@ -538,7 +552,7 @@ module Mxrb
             ret = obj['ReturnValue'].to_s.strip
             if ret.empty?
               lines << "#{' ' * indent}end_flow" if indent > 2
-            elsif (match = ret.match(/\A\$([A-Za-z_][A-Za-z0-9_]*)\z/))
+            elsif (match = ret.match(/\A\$([A-Za-z_][A-Za-z0-9_]*)\z/)) && returned_as_variable?(match[1])
               lines << "#{' ' * indent}return_value :#{match[1]}"
             else
               lines << "#{' ' * indent}return_value #{ruby(ret)}"

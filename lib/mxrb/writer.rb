@@ -1804,13 +1804,13 @@ module Mxrb
         ruby_enumeration_value_doc(value, previous: prior)
       end
 
-      current.merge(
+      # A new enumeration gets the defaults; a stored one keeps the fields it stores.
+      defaults = previous ? {} : { 'Excluded' => false, 'ExportLevel' => 'Hidden' }
+      defaults.merge(current).merge(
         '$ID' => id,
         '$Type' => current['$Type'] || 'Enumerations$Enumeration',
         'Name' => declaration.fetch(:name).to_s,
         'Documentation' => declaration.fetch(:documentation, '').to_s,
-        'Excluded' => current.fetch('Excluded', false),
-        'ExportLevel' => current.fetch('ExportLevel', 'Hidden'),
         'Values' => IO::BsonCodec.build_array(values, marker: values_payload.fetch(:marker))
       )
     end

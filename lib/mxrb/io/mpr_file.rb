@@ -278,6 +278,11 @@ module Mxrb
         update_unit_bytes(uuid, bson_bytes)
       end
 
+      # Writes a document as given, without the schema projection update_unit applies.
+      def write_unit_as_stored(uuid, contents_doc)
+        update_unit_bytes(uuid, serialize_contents(contents_doc))
+      end
+
       # Persist a validated native BSON payload without reserializing other
       # fields, numeric widths, UUID representations, or property order.
       def update_unit_bytes(uuid, bson_bytes)

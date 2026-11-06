@@ -265,7 +265,7 @@ module Mxrb
         objects = Array(flow.objects)
         flows = Array(flow.flows)
         if editable_flow_body?(objects, flows)
-          dsl_lines = body_dsl_lines(objects, flows, 2)
+          dsl_lines = with_flow_return_variable(flow) { body_dsl_lines(objects, flows, 2) }
           body << '  annotations_authoritative' if flow_objects_contain_annotation?(objects)
           body.concat(dsl_lines)
           if internal_metadata && (fingerprint = flow_body_fingerprint(dsl_lines, flow))

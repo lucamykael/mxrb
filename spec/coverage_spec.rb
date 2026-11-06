@@ -2964,7 +2964,7 @@ RSpec.describe 'MXRB defensive and compatibility paths' do
     }
     doc = writer.send(:entity_doc, entity, 'M', previous, 0)
     expect(doc).not_to have_key('generalization')
-    expect(writer.send(:lifecycle_doc, event: :validate, handler: 'M.Validate'))
+    expect(writer.send(:lifecycle_doc, { event: :validate, handler: 'M.Validate' }))
       .to include('Type' => 'Validate')
 
     page = {

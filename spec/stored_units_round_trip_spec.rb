@@ -104,6 +104,20 @@ RSpec.describe 'stored units through a project.rb round trip' do
     end
   end
 
+  it 'returns a variable by name only when the flow names its return variable after it' do
+    named = Struct.new(:return_variable_name)
+    answers = lambda do |flow|
+      exporter.send(:with_flow_return_variable, flow) do
+        %w[Item Other].map { exporter.send(:returned_as_variable?, _1) }
+      end
+    end
+
+    expect(answers.call(named.new('Item'))).to eq([true, false])
+    expect(answers.call(named.new('ReturnValue'))).to eq([false, false])
+    expect(answers.call(Object.new)).to eq([true, true])
+    expect(exporter.send(:returned_as_variable?, 'Anything')).to be(true)
+  end
+
   it 'keeps the export level a module stores' do
     writer = Mxrb::Writer.allocate
     stored = { '$ID' => 'id', '$Type' => 'Projects$ModuleImpl', 'ExportLevel' => 'Source', 'SortIndex' => 1 }
