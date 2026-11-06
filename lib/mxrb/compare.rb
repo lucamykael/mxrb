@@ -49,6 +49,9 @@ module Mxrb
 
       def snapshot(path)
         Mxrb.open(path) do |project|
+          # Only versions whose rebuilds write exactly the fields a project stores are
+          # compared with their empty fields; see StoredFields.
+          @with_empty_fields = StoredFields.applies_to?(project.mendix_version) if @with_empty_fields.nil?
           {
             project: {
               mendix_version: project.mendix_version,
@@ -58,9 +61,48 @@ module Mxrb
             navigation: navigation_summary(project.navigation),
             design_assets: design_asset_summary(project),
             units: unit_summary(project),
+            documents: document_summary(project),
             modules: project.modules.sort_by(&:name).map { module_summary(_1) }
           }
         end
+      end
+
+      # Documents compared as stored elsewhere in the snapshot, with their summaries.
+      SUMMARIZED_DOCUMENTS = %w[
+        Forms$Page Forms$Layout Forms$PageTemplate Forms$BuildingBlock Forms$Snippet
+        Navigation$NavigationDocument
+      ].freeze
+      private_constant :SUMMARIZED_DOCUMENTS
+
+      # Every other unit as stored, under the names of its containers, its own name and
+      # its type, so a rebuild cannot change a document no summary reads.
+      def document_summary(project)
+        units = project.all_units.to_h { [_1.fetch('UnitID'), _1] }
+        documents = units.each_value.filter_map do |unit|
+          next if unit['UnitID'] == unit['ContainerID']
+
+          doc = project.parse_bson(unit)
+          next if SUMMARIZED_DOCUMENTS.include?(doc['$Type'])
+
+          [document_label(project, units, unit, doc), unit['UnitID'].to_s, stored_document(doc)]
+        end
+        labelled = documents.group_by(&:first)
+        labelled.flat_map do |label, entries|
+          next [[label, entries.first.last]] if entries.one?
+
+          entries.sort_by { _1[1] }.each_with_index.map { |entry, index| ["#{label} #{index + 1}", entry.last] }
+        end.sort_by(&:first).to_h
+      end
+
+      def document_label(project, units, unit, doc)
+        names = []
+        container = units[unit['ContainerID']]
+        while container && container['UnitID'] != container['ContainerID']
+          names.unshift(project.parse_bson(container)['Name'].to_s)
+          container = units[container['ContainerID']]
+        end
+        names << doc['Name'].to_s unless doc['Name'].to_s.empty?
+        "#{names.join('/')} #{doc['$Type']}".strip
       end
 
       def navigation_summary(navigation)
@@ -224,8 +266,8 @@ module Mxrb
         case value
         when Hash
           fields = canonical_fields(without_unused_values(value, kinds))
-          fields.to_h { [_1.to_s, normalized_document(_2, kinds)] }
-                .except('$ID').reject { |_key, entry| absent_field?(entry) }
+          fields = fields.to_h { [_1.to_s, normalized_document(_2, kinds)] }.except('$ID')
+          @with_empty_fields ? fields : fields.reject { |_key, entry| absent_field?(entry) }
         when Array then value.map { normalized_document(_1, kinds) }
         when BSON::Binary then null_pointer?(value) ? nil : :identity
         else value
@@ -411,6 +453,7 @@ module Mxrb
 
         if left.is_a?(Array) && right.is_a?(Array)
           return diff_named_arrays(left, right, path) if named_array?(left) && named_array?(right)
+          return diff_stored_list(left, right, path) if stored_list?(left) && stored_list?(right)
 
           max = [left.size, right.size].max
           return (0...max).flat_map { diff_values(left[_1], right[_1], path + [_1]) }
@@ -420,8 +463,8 @@ module Mxrb
       end
 
       def diff_named_arrays(left, right, path)
-        left_by_name = left.to_h { [_1[:name], _1] }
-        right_by_name = right.to_h { [_1[:name], _1] }
+        left_by_name = left.to_h { [item_name(_1), _1] }
+        right_by_name = right.to_h { [item_name(_1), _1] }
         common_names = (left_by_name.keys & right_by_name.keys).sort
         changes = common_names.flat_map do |name|
           diff_values(left_by_name[name], right_by_name[name], path + [name])
@@ -433,25 +476,37 @@ module Mxrb
           match = right_only.find { same_except_name?(left_item, _1) }
           next unless match
 
-          changes.concat(diff_values(left_item, match, path + [left_item[:name]]))
+          changes.concat(diff_values(left_item, match, path + [item_name(left_item)]))
           left_only.delete(left_item)
           right_only.delete(match)
         end
 
-        changes.concat(left_only.flat_map { diff_values(_1, nil, path + [_1[:name]]) })
-        changes.concat(right_only.flat_map { diff_values(nil, _1, path + [_1[:name]]) })
+        changes.concat(left_only.flat_map { diff_values(_1, nil, path + [item_name(_1)]) })
+        changes.concat(right_only.flat_map { diff_values(nil, _1, path + [item_name(_1)]) })
         changes
       end
 
-      def named_array?(items)
-        return false unless items.all? { _1.is_a?(Hash) && _1.key?(:name) }
+      # A stored list starts with its collection marker, followed by named elements.
+      def stored_list?(items)
+        items.first.is_a?(Integer) && items.size > 1 && named_array?(items.drop(1))
+      end
 
-        names = items.map { _1[:name] }
+      def diff_stored_list(left, right, path)
+        diff_values(left.first, right.first, path + [0]) + diff_named_arrays(left.drop(1), right.drop(1), path)
+      end
+
+      # A summary names an item under :name, and a stored element under 'Name'.
+      def named_array?(items)
+        return false unless items.all? { _1.is_a?(Hash) && !item_name(_1).nil? }
+
+        names = items.map { item_name(_1) }
         names.uniq.size == names.size
       end
 
+      def item_name(item) = item.key?(:name) ? item[:name] : item['Name']
+
       def same_except_name?(left, right)
-        left.reject { |key, _| key == :name } == right.reject { |key, _| key == :name }
+        left.except(:name, 'Name') == right.except(:name, 'Name')
       end
 
       def normalize_hash(value)

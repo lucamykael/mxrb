@@ -92,7 +92,8 @@ The comparator used for this matrix includes:
 - pages and their complete deep widget/layout trees, events and data sources;
 - menus;
 - pages, layouts, page templates, building blocks and snippets, as stored;
-- microflow and nanoflow parameters, roles, objects, actions and edges.
+- microflow and nanoflow parameters, roles, objects, actions and edges;
+- every other unit as stored, named by its containers, its name and its type.
 
 Stored documents are compared without their element identities, empty or false
 fields, null pointers, and the action or text template a widget value stores when its
@@ -103,12 +104,13 @@ says, because MxBuild ignores that field, a page without the `Autofocus` the sch
 defaults to `Off`, and the default marker on six collections. A change to a page appears
 twice, in its summary and as stored. The navigation document is compared as stored too.
 
-Because empty fields are left out, the comparison does not show a field that a
-rebuild adds or drops while it is empty. A rebuild for the same Mendix version
-therefore writes only the fields its project stores on each element type, learned
-from the exported units and the version's Studio Pro template, since Studio Pro
-stores every property a version has. Mendix 10.24.0 and 11.12.1 are exempt: the
-writer follows their schemas, and generators may leave out fields they have.
+A rebuild for the same Mendix version writes only the fields its project stores on
+each element type, under the collection marker the project always uses for that field.
+These are learned from the exported units and the version's Studio Pro template, since
+Studio Pro stores every property a version has. For these versions, stored documents
+are compared with their empty and false fields, so an added or dropped field shows up.
+Mendix 10.24.0 and 11.12.1 are exempt from both: the writer follows their schemas, and
+generators may leave out fields they have.
 
 UUIDs and visual canvas coordinates are normalized because regeneration may
 legitimately assign new identifiers or positions. Mendix names remain canonical

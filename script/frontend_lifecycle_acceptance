@@ -180,16 +180,19 @@ module MxrbFrontendLifecycleAcceptance
       home = "modules.#{MODULE_NAME}.pages.Home"
       allowed = [
         'design_assets.theme/web/frontend-lifecycle.css',
+        "documents.#{MODULE_NAME} DomainModels$DomainModel.Entities",
+        "documents.#{MODULE_NAME}/ACT_CreateOrder Microflows$Microflow",
+        "documents.#{MODULE_NAME}/NAN_RefreshOrders Microflows$Nanoflow",
         "modules.#{MODULE_NAME}.entities.Order",
         "modules.#{MODULE_NAME}.microflows.ACT_CreateOrder",
         "modules.#{MODULE_NAME}.nanoflows.NAN_RefreshOrders",
-        "#{home}.document.FormCall.Arguments.1.Widgets.1.Widgets.1.Content.Template.Items.1.Text",
+        "#{home}.document.FormCall.Arguments.1.Widgets.pageHeader.Widgets.pageTitle.Content.Template.Items.1.Text",
         "#{home}.document.Title.Items.1.Text",
         "#{home}.title",
         "#{home}.widgets.pageHeader.children.pageTitle.options.caption",
         "modules.#{MODULE_NAME}.pages.Orders",
-        'navigation.document.Profiles.1.AppTitle.Items.1.Text',
-        'navigation.document.Profiles.1.Menu.Items',
+        'navigation.document.Profiles.Responsive.AppTitle.Items.1.Text',
+        'navigation.document.Profiles.Responsive.Menu.Items',
         'navigation.profiles.Responsive.app_title.en_US',
         'navigation.profiles.Responsive.items.0'
       ]

@@ -69,6 +69,41 @@ RSpec.describe 'stored units through a project.rb round trip' do
     expect(exporter.send(:semantic_mapping?, 'Elements' => [2, modern])).to be(false)
   end
 
+  describe 'domain model elements' do
+    let(:writer) { Mxrb::Writer.allocate }
+
+    it 'keeps where an association connects to its entities' do
+      association = { name: 'A_B', type: :Reference }
+      stored = { 'ParentConnection' => '82;0', 'ChildConnection' => '21;100' }
+
+      expect(writer.send(:association_doc, association, from_id: 'a', to_id: 'b', previous: stored))
+        .to include('ParentConnection' => '82;0', 'ChildConnection' => '21;100')
+      expect(writer.send(:association_doc, association, from_id: 'a', to_id: 'b', previous: nil))
+        .to include('ParentConnection' => '0;50', 'ChildConnection' => '100;50')
+    end
+
+    it 'keeps the identity and field name of a stored event handler' do
+      stored = { '$ID' => 'kept', 'Event' => 'Commit', 'Moment' => 'Before', 'Extra' => 1 }
+      handler = writer.send(:lifecycle_doc, { event: :before_commit, handler: 'App.Check' }, previous: stored)
+
+      expect(handler).to include('$ID' => 'kept', 'Event' => 'Commit', 'Moment' => 'Before', 'Extra' => 1)
+      expect(handler).not_to have_key('Type')
+      expect(writer.send(:lifecycle_doc, { event: :after_create, handler: 'App.Run' })).to include('Type' => 'Create')
+    end
+
+    it 'keeps the stored order of validation rules' do
+      rule = lambda do |kind|
+        { 'Attribute' => 'App.Item.Code', 'RuleInfo' => { '$Type' => "DomainModels$#{kind}RuleInfo" } }
+      end
+      stored = Mxrb::IO::BsonCodec.build_array([rule.call('Unique'), rule.call('Other'), rule.call('Required')])
+      entity = { name: 'Item', attributes: [{ name: 'Code', required: true, unique: true }] }
+      rules = writer.send(:validation_rules_doc, entity, 'App', stored).drop(1)
+
+      expect(rules.map { _1.dig('RuleInfo', '$Type').delete_prefix('DomainModels$') })
+        .to eq(%w[UniqueRuleInfo OtherRuleInfo RequiredRuleInfo])
+    end
+  end
+
   it 'keeps the export level a module stores' do
     writer = Mxrb::Writer.allocate
     stored = { '$ID' => 'id', '$Type' => 'Projects$ModuleImpl', 'ExportLevel' => 'Source', 'SortIndex' => 1 }
