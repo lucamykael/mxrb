@@ -25,12 +25,32 @@ module MxbuildOracle
     report = summary(results).merge(mxbuild: options.fetch(:mxbuild), cases: results)
     File.write(File.join(inputs, "oracle-#{options[:label] || 'all'}.json"), JSON.pretty_generate(report))
     print_report(report)
-    exit(report.fetch(:fail).zero? ? 0 : 1)
+    exit(report.fetch(:pass) == results.size ? 0 : 1)
   end
 
+  # Prints the report, and on GitHub Actions also one annotation per case, because the
+  # logs and artifacts of a run are not always reachable from where it is read.
   def print_report(report)
     puts JSON.generate(report.except(:cases))
-    report.fetch(:cases).each { |result| puts JSON.generate(result.except(:source, :rebuilt)) }
+    report.fetch(:cases).each do |result|
+      puts JSON.generate(result.except(:source, :rebuilt))
+      puts annotation(result) if ENV['GITHUB_ACTIONS']
+    end
+  end
+
+  def annotation(result)
+    level = result.fetch(:status) == 'pass' ? 'notice' : 'error'
+    builds = %i[source rebuilt].map { |variant| "#{variant} exit #{result.dig(variant, :exit_code)}" }
+    details = [*builds, "new errors #{result.fetch(:new_errors)}", "new warnings #{result.fetch(:new_warnings)}"]
+    unless level == 'notice'
+      details += %i[source rebuilt].map { |variant| "#{variant}: #{failure_lines(result.fetch(variant))}" }
+    end
+    "::#{level}::#{result.fetch(:label)} #{result.fetch(:status)}: #{details.join('; ')}".gsub("\n", ' ')
+  end
+
+  # The last lines of a log that mention an error, to tell why a build failed.
+  def failure_lines(build)
+    File.readlines(build.fetch(:log), chomp: true).grep(/error|exception|fail/i).last(4).join(' | ')
   end
 
   def cases(inputs, label)
