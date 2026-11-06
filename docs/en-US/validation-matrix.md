@@ -103,6 +103,13 @@ says, because MxBuild ignores that field, a page without the `Autofocus` the sch
 defaults to `Off`, and the default marker on six collections. A change to a page appears
 twice, in its summary and as stored. The navigation document is compared as stored too.
 
+Because empty fields are left out, the comparison does not show a field that a
+rebuild adds or drops while it is empty. A rebuild for the same Mendix version
+therefore writes only the fields its project stores on each element type, learned
+from the exported units and the version's Studio Pro template, since Studio Pro
+stores every property a version has. Mendix 10.24.0 and 11.12.1 are exempt: the
+writer follows their schemas, and generators may leave out fields they have.
+
 UUIDs and visual canvas coordinates are normalized because regeneration may
 legitimately assign new identifiers or positions. Mendix names remain canonical
 in the semantic snapshot; Ruby filename and identifier formatting is not used

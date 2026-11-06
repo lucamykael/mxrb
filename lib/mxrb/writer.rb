@@ -93,7 +93,11 @@ module Mxrb
           # documents encoded with the source version's BSON representation.
           mpr.update_version!(@definition.fetch(:version))
           apply(mpr, native_units)
-          mpr.apply_studio_compatibility! if studio_compatibility_required?
+          if studio_compatibility_required?
+            mpr.apply_studio_compatibility!
+          else
+            project_onto_stored_fields(mpr, native_units)
+          end
           write_native_compatibility(mpr, native_units)
           mpr.write_architecture_definition(@definition)
           mpr.write_ruby_app_sources(ruby_app_source_files) if @definition[:ruby_app_sources_path]
@@ -2130,6 +2134,18 @@ module Mxrb
           raise ValidationError,
                 "page overlay #{mod.fetch(:name)}.#{page.fetch(:name)}: #{e.message}"
         end
+      end
+    end
+
+    # A rebuild of the same version writes only the fields its project stores.
+    def project_onto_stored_fields(mpr, native_units)
+      version = @definition.fetch(:version).to_s
+      return if native_units.empty? || !StoredFields.applies_to?(version)
+
+      fields = StoredFields.from(native_units.map { _1.fetch('doc') }, version:)
+      mpr.all_units.each do |unit|
+        document = mpr.parse_contents(unit)
+        mpr.update_unit(unit.fetch('UnitID'), document) if fields.project!(document)
       end
     end
 

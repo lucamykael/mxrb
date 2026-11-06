@@ -97,6 +97,14 @@ was sein `SortDirection` sagt, weil MxBuild dieses Feld ignoriert, eine Seite oh
 Sammlungen. Eine Änderung an einer Seite erscheint zweimal, in der Zusammenfassung und
 wie gespeichert. Auch das Navigationsdokument wird wie gespeichert verglichen.
 
+Da leere Felder ausgelassen werden, zeigt der Vergleich kein leeres Feld, das ein
+Neuaufbau hinzufügt oder entfernt. Ein Neuaufbau für dieselbe Mendix-Version schreibt
+deshalb je Elementtyp nur die Felder, die das Projekt dort speichert. Sie werden aus
+den exportierten Units und dem Studio-Pro-Template der Version gelernt, weil Studio
+Pro jede Eigenschaft einer Version speichert. Ausgenommen sind Mendix 10.24.0 und
+11.12.1: Der Writer folgt ihren Schemas, und Generatoren können Felder auslassen, die
+sie haben.
+
 ## Offizielle Gates
 
 Sudoku 11.12.1: **0 Fehler** in `mx check`, identische 23 Warnungen,
