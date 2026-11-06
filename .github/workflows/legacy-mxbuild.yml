@@ -110,7 +110,7 @@ jobs:
           # The Windows tar, not the msys2 one setup-ruby puts first on PATH, which reads D: as a host.
           $tarOutput = & "$env:SystemRoot\System32\tar.exe" -xzf $archive -C "$env:RUNNER_TEMP/mxbuild" 2>&1
           $tarExit = $LASTEXITCODE
-          if ($tarExit -ne 0) { Write-Host "::warning::tar exited $tarExit: $(($tarOutput | Select-Object -First 5) -join ' | ')" }
+          if ($tarExit -ne 0) { Write-Host "::warning::tar exited ${tarExit}: $(($tarOutput | Select-Object -First 5) -join ' | ')" }
           $exe = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/mxbuild" -Recurse -File |
             Where-Object { $_.Name -ieq 'mxbuild.exe' } | Select-Object -First 1
           if ($null -eq $exe) {
