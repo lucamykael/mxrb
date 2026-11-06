@@ -115,6 +115,12 @@ RSpec.describe 'navigation through a project.rb round trip' do
       expect(action.fetch('FormSettings')).to include('Location' => 'Popup', 'TitleOverride' => { 'Kept' => true })
     end
 
+    it 'keeps the stored fields of an item that Ruby does not describe' do
+      item = menu_item('5.21.4', previous: { 'Documentation' => '', 'Icon' => { 'Code' => 1 } })
+
+      expect(item).to include('Documentation' => '', 'Icon' => nil)
+    end
+
     it 'lets a declaration replace the stored values' do
       prior = { 'DisabledDuringExecution' => true, 'FormSettings' => { 'Location' => 'Popup' } }
       action = menu_item('7.5.0', page: 'A.B', location: 'Content', disabled_during_execution: false,

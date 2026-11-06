@@ -744,9 +744,9 @@ module Mxrb
       when 'XmlSchemas$XmlSchema'
         return xml_schema_declaration(document) if semantic_xml_schema?(doc)
       when 'ImportMappings$ImportMapping'
-        return mapping_declaration(document, :import) if doc.key?('JsonStructure')
+        return mapping_declaration(document, :import) if semantic_mapping?(doc)
       when 'ExportMappings$ExportMapping'
-        return mapping_declaration(document, :export) if doc.key?('JsonStructure')
+        return mapping_declaration(document, :export) if semantic_mapping?(doc)
       when 'Rest$PublishedRestService'
         return published_rest_declaration(document, mod:) if semantic_rest_service?(doc, mod:)
       when 'ODataPublish$PublishedODataService2'
