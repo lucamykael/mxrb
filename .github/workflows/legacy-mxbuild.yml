@@ -46,6 +46,17 @@ jobs:
           fetch ako/QueryApiBlogPost QueryApiBlogPost f042c01fab6ab22181329db3043928859af35217
           fetch bhataparnak/MendixApp MendixApp 8912322e170e5babb4bf77461242ae51b555ca42
           fetch mendixlabs/TreeViewAndGridView TreeViewAndGridView efe16dc5f35087f98ee4128559bc2a88552b0d81
+      - name: Add the Data Widgets the 9.6 project uses but does not commit
+        # The project uses Data Widgets 2.0.0; 2.0.1 is the oldest release Mendix publishes.
+        # Both variants get the same widgets, so they cannot account for a difference.
+        run: |
+          package="${RUNNER_TEMP}/DataWidgets.mpk"
+          curl -fsSL -o "$package" https://github.com/mendix/widgets-resources/releases/download/data-widgets-v2.0.1/DataWidgets_2_0_1.mpk
+          echo "::notice::DataWidgets_2_0_1.mpk sha256 $(sha256sum "$package" | cut -d' ' -f1)"
+          mkdir -p "${RUNNER_TEMP}/datawidgets" "${RUNNER_TEMP}/fixtures/MendixApp/widgets"
+          unzip -q "$package" -d "${RUNNER_TEMP}/datawidgets"
+          find "${RUNNER_TEMP}/datawidgets" -name '*.mpk' -exec cp {} "${RUNNER_TEMP}/fixtures/MendixApp/widgets/" \;
+          echo "::notice::widgets $(ls "${RUNNER_TEMP}/fixtures/MendixApp/widgets" | tr '\n' ' ')"
       - name: Rebuild each project through project.rb
         run: |
           f="${RUNNER_TEMP}/fixtures"
@@ -95,6 +106,9 @@ jobs:
         with:
           distribution: temurin
           java-version: ${{ matrix.java }}
+      - name: Install the Visual C++ runtimes SharpSvn in MxBuild 6 and 7 loads
+        shell: pwsh
+        run: choco install vcredist2010 vcredist2012 vcredist2013 --no-progress -y
       - name: Download official MxBuild ${{ matrix.mxbuild }}
         shell: pwsh
         run: |
