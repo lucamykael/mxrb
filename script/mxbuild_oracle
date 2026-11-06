@@ -2,9 +2,13 @@
 # frozen_string_literal: true
 
 # Builds each case prepared by script/mxbuild_oracle_inputs with the official MxBuild of
-# its Mendix version, once as stored and once as rebuilt through project.rb, and fails
-# when the rebuild does not build where the stored project does, or when MxBuild reports
-# a consistency error for the rebuild that it does not report for the stored project.
+# its Mendix version, once as stored and once as rebuilt through project.rb. A case
+#
+# - passes when both build and the rebuild has no consistency error the stored project lacks;
+# - is equivalent when MxBuild cannot build the stored project either (a library or theme
+#   the project does not commit, say) and fails on the rebuild with the same diagnostics;
+# - fails otherwise.
+#
 # It uses only the Ruby standard library, so it runs where the mxrb bundle does not.
 #
 #   script/mxbuild_oracle INPUTS --mxbuild PATH [--java-home DIR] [--label LABEL] [--timeout MINUTES]
@@ -17,6 +21,8 @@ require 'timeout'
 # Runs MxBuild on both variants of each case and compares the outcomes.
 module MxbuildOracle
   CODE = /\b(C[EW]\d{3,4})\b/
+  DIAGNOSTIC = /error|exception|fail/i
+  STATUSES = %w[pass equivalent fail].freeze
 
   module_function
 
@@ -25,7 +31,7 @@ module MxbuildOracle
     report = summary(results).merge(mxbuild: options.fetch(:mxbuild), cases: results)
     File.write(File.join(inputs, "oracle-#{options[:label] || 'all'}.json"), JSON.pretty_generate(report))
     print_report(report)
-    exit(report.fetch(:pass) == results.size ? 0 : 1)
+    exit(report.fetch(:fail).zero? ? 0 : 1)
   end
 
   # Prints the report, and on GitHub Actions also one annotation per case, because the
@@ -39,7 +45,7 @@ module MxbuildOracle
   end
 
   def annotation(result)
-    level = result.fetch(:status) == 'pass' ? 'notice' : 'error'
+    level = { 'pass' => 'notice', 'equivalent' => 'warning' }.fetch(result.fetch(:status), 'error')
     builds = %i[source rebuilt].map { |variant| "#{variant} exit #{result.dig(variant, :exit_code)}" }
     details = [*builds, "new errors #{result.fetch(:new_errors)}", "new warnings #{result.fetch(:new_warnings)}"]
     unless level == 'notice'
@@ -48,9 +54,10 @@ module MxbuildOracle
     "::#{level}::#{result.fetch(:label)} #{result.fetch(:status)}: #{details.join('; ')}".gsub("\n", ' ')
   end
 
-  # The last lines of a log that mention an error, to tell why a build failed.
+  # The first and last diagnostics of a build, to tell why it failed.
   def failure_lines(build)
-    File.readlines(build.fetch(:log), chomp: true).grep(/error|exception|fail/i).last(4).join(' | ')
+    diagnostics = build.fetch(:diagnostics)
+    (diagnostics.first(3) + diagnostics.last(2)).uniq.join(' | ')
   end
 
   def cases(inputs, label)
@@ -61,20 +68,25 @@ module MxbuildOracle
   end
 
   def summary(results)
-    %w[pass inconclusive fail].to_h { |status| [status.to_sym, results.count { _1.fetch(:status) == status }] }
+    STATUSES.to_h { |status| [status.to_sym, results.count { _1.fetch(:status) == status }] }
   end
 
-  # Passes when the rebuild builds and adds no consistency error; says nothing when
-  # MxBuild cannot build the stored project either.
   def verdict(inputs, test_case, options)
     source, rebuilt = %w[source rebuilt].map { build(inputs, test_case, _1, options) }
     new_errors = rebuilt.fetch(:errors) - source.fetch(:errors)
-    status = if !source.fetch(:built) then 'inconclusive'
-             elsif rebuilt.fetch(:built) && new_errors.empty? then 'pass'
-             else 'fail'
-             end
-    { label: test_case.fetch('label'), version: test_case.fetch('version'), status:, new_errors:,
+    { label: test_case.fetch('label'), version: test_case.fetch('version'),
+      status: status(source, rebuilt, new_errors), new_errors:,
       new_warnings: rebuilt.fetch(:warnings) - source.fetch(:warnings), source:, rebuilt: }
+  end
+
+  def status(source, rebuilt, new_errors)
+    if source.fetch(:built)
+      rebuilt.fetch(:built) && new_errors.empty? ? 'pass' : 'fail'
+    elsif !rebuilt.fetch(:built) && rebuilt.fetch(:diagnostics) == source.fetch(:diagnostics)
+      'equivalent'
+    else
+      'fail'
+    end
   end
 
   def build(inputs, test_case, variant, options)
@@ -84,13 +96,15 @@ module MxbuildOracle
     command = [options.fetch(:mxbuild), '--target=package', '--loose-version-check', '-o', package,
                *java_options(options[:java_home]), File.join(directory, test_case.fetch('mpr'))]
     status = execute(command, log, options.fetch(:timeout) * 60)
-    outcome(status, package, log)
+    outcome(status, package, log, File.expand_path(directory))
   end
 
-  def outcome(status, package, log)
-    lines = File.readlines(log, chomp: true).map(&:strip)
+  # The diagnostics name the project directory, which differs between the variants.
+  def outcome(status, package, log, directory)
+    paths = [directory, directory.tr('/', '\\')].uniq
+    lines = File.readlines(log, chomp: true).map { |line| paths.reduce(line.strip) { _1.gsub(_2, '<project>') } }
     { exit_code: status, built: status.zero? && File.file?(package), log:,
-      errors: codes(lines, 'CE'), warnings: codes(lines, 'CW') }
+      errors: codes(lines, 'CE'), warnings: codes(lines, 'CW'), diagnostics: lines.grep(DIAGNOSTIC).uniq.sort }
   end
 
   def java_options(home)
