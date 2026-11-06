@@ -1,0 +1,146 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Builds each case prepared by script/mxbuild_oracle_inputs with the official MxBuild of
+# its Mendix version, once as stored and once as rebuilt through project.rb. A case
+#
+# - passes when both build and the rebuild has no consistency error the stored project lacks;
+# - is equivalent when MxBuild cannot build the stored project either (a library or theme
+#   the project does not commit, say) and fails on the rebuild with the same diagnostics;
+# - fails otherwise.
+#
+# It uses only the Ruby standard library, so it runs where the mxrb bundle does not.
+#
+#   script/mxbuild_oracle INPUTS --mxbuild PATH [--java-home DIR] [--label LABEL] [--timeout MINUTES]
+
+require 'English'
+require 'json'
+require 'optparse'
+require 'timeout'
+
+# Runs MxBuild on both variants of each case and compares the outcomes.
+module MxbuildOracle
+  CODE = /\b(C[EW]\d{3,4})\b/
+  DIAGNOSTIC = /error|exception|fail/i
+  STATUSES = %w[pass equivalent fail].freeze
+
+  module_function
+
+  def run(inputs, options)
+    results = cases(inputs, options[:label]).map { verdict(inputs, _1, options) }
+    report = summary(results).merge(mxbuild: options.fetch(:mxbuild), cases: results)
+    File.write(File.join(inputs, "oracle-#{options[:label] || 'all'}.json"), JSON.pretty_generate(report))
+    print_report(report)
+    exit(report.fetch(:fail).zero? ? 0 : 1)
+  end
+
+  # Prints the report, and on GitHub Actions also one annotation per case, because the
+  # logs and artifacts of a run are not always reachable from where it is read.
+  def print_report(report)
+    puts JSON.generate(report.except(:cases))
+    report.fetch(:cases).each do |result|
+      puts JSON.generate(result.except(:source, :rebuilt))
+      puts annotation(result) if ENV['GITHUB_ACTIONS']
+    end
+  end
+
+  def annotation(result)
+    level = { 'pass' => 'notice', 'equivalent' => 'warning' }.fetch(result.fetch(:status), 'error')
+    builds = %i[source rebuilt].map { |variant| "#{variant} exit #{result.dig(variant, :exit_code)}" }
+    details = [*builds, "new errors #{result.fetch(:new_errors)}", "new warnings #{result.fetch(:new_warnings)}"]
+    unless level == 'notice'
+      details += %i[source rebuilt].map { |variant| "#{variant}: #{failure_lines(result.fetch(variant))}" }
+    end
+    "::#{level}::#{result.fetch(:label)} #{result.fetch(:status)}: #{details.join('; ')}".gsub("\n", ' ')
+  end
+
+  # The first and last diagnostics of a build, to tell why it failed.
+  def failure_lines(build)
+    diagnostics = build.fetch(:diagnostics)
+    (diagnostics.first(3) + diagnostics.last(2)).uniq.join(' | ')
+  end
+
+  def cases(inputs, label)
+    all = JSON.parse(File.read(File.join(inputs, 'cases.json')))
+    selected = label ? all.select { _1.fetch('label') == label } : all
+    abort "no case to build in #{inputs}" if selected.empty?
+    selected
+  end
+
+  def summary(results)
+    STATUSES.to_h { |status| [status.to_sym, results.count { _1.fetch(:status) == status }] }
+  end
+
+  def verdict(inputs, test_case, options)
+    source, rebuilt = %w[source rebuilt].map { build(inputs, test_case, _1, options) }
+    new_errors = rebuilt.fetch(:errors) - source.fetch(:errors)
+    { label: test_case.fetch('label'), version: test_case.fetch('version'),
+      status: status(source, rebuilt, new_errors), new_errors:,
+      new_warnings: rebuilt.fetch(:warnings) - source.fetch(:warnings), source:, rebuilt: }
+  end
+
+  def status(source, rebuilt, new_errors)
+    if source.fetch(:built)
+      rebuilt.fetch(:built) && new_errors.empty? ? 'pass' : 'fail'
+    elsif !rebuilt.fetch(:built) && rebuilt.fetch(:diagnostics) == source.fetch(:diagnostics)
+      'equivalent'
+    else
+      'fail'
+    end
+  end
+
+  def build(inputs, test_case, variant, options)
+    directory = File.join(inputs, test_case.fetch(variant))
+    log = File.expand_path("../mxbuild-#{variant}.log", directory)
+    package = File.expand_path("../#{variant}.mda", directory)
+    command = [options.fetch(:mxbuild), '--target=package', '--loose-version-check', '-o', package,
+               *java_options(options[:java_home]), File.join(directory, test_case.fetch('mpr'))]
+    status = execute(command, log, options.fetch(:timeout) * 60)
+    outcome(status, package, log, File.expand_path(directory))
+  end
+
+  # The diagnostics name the project directory, which differs between the variants.
+  def outcome(status, package, log, directory)
+    paths = [directory, directory.tr('/', '\\')].uniq
+    lines = File.readlines(log, chomp: true).map { |line| paths.reduce(line.strip) { _1.gsub(_2, '<project>') } }
+    { exit_code: status, built: status.zero? && File.file?(package), log:,
+      errors: codes(lines, 'CE'), warnings: codes(lines, 'CW'), diagnostics: lines.grep(DIAGNOSTIC).uniq.sort }
+  end
+
+  def java_options(home)
+    return [] unless home
+
+    ["--java-home=#{home}", "--java-exe-path=#{File.join(home, 'bin', Gem.win_platform? ? 'java.exe' : 'java')}"]
+  end
+
+  def execute(command, log, seconds)
+    pid = Process.spawn(*command, out: log, err: %i[child out])
+    Timeout.timeout(seconds) { Process.wait(pid) }
+    $CHILD_STATUS.exitstatus || 1
+  rescue Timeout::Error
+    Process.kill('KILL', pid)
+    Process.wait(pid)
+    File.write(log, "\nmxbuild_oracle: timed out after #{seconds}s\n", mode: 'a')
+    124
+  end
+
+  # The distinct diagnostic lines of one severity, without ordering noise.
+  def codes(lines, prefix)
+    lines.select { |line| line[CODE, 1]&.start_with?(prefix) }.uniq.sort
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = { timeout: 30 }
+  OptionParser.new do |parser|
+    parser.on('--mxbuild PATH') { options[:mxbuild] = _1 }
+    parser.on('--java-home DIR') { options[:java_home] = _1 }
+    parser.on('--label LABEL') { options[:label] = _1 }
+    parser.on('--timeout MINUTES', Integer) { options[:timeout] = _1 }
+  end.parse!
+  unless ARGV.one? && options[:mxbuild]
+    abort 'usage: mxbuild_oracle INPUTS --mxbuild PATH [--java-home DIR] [--label LABEL] [--timeout MINUTES]'
+  end
+
+  MxbuildOracle.run(ARGV.first, options)
+end

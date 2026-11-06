@@ -1,0 +1,156 @@
+name: Legacy MxBuild oracle
+
+# Builds public projects of Mendix versions older than 10 with the official MxBuild of
+# their own version, as stored and as rebuilt through project.rb (see script/mxbuild_oracle).
+# On 2026-11-06, 6.10.8 built both ways; 7.5.0 and 7.17.0 passed the model check both ways
+# and stopped at javac on jars the repositories do not commit; 9.6.1 reported the same
+# theme and layout errors both ways.
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/legacy-mxbuild.yml'
+      - 'script/mxbuild_oracle*'
+      - 'lib/mxrb/stored_fields.rb'
+      - 'lib/mxrb/studio_compatibility*'
+      - 'lib/mxrb/writer*'
+      - 'lib/mxrb/writer/**'
+      - 'lib/mxrb/exporter*'
+      - 'lib/mxrb/exporter/**'
+  workflow_dispatch:
+  schedule:
+    - cron: "40 7 * * 1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: legacy-mxbuild-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - name: Check out pinned public projects
+        run: |
+          fetch() {
+            git clone --quiet "https://github.com/$1.git" "${RUNNER_TEMP}/fixtures/$2"
+            git -C "${RUNNER_TEMP}/fixtures/$2" checkout --quiet "$3"
+          }
+          fetch ako/ConnectorKitDemo ConnectorKitDemo 9eed61f1fb737d189a3b018ac7691c87569053de
+          fetch ako/QueryApiBlogPost QueryApiBlogPost f042c01fab6ab22181329db3043928859af35217
+          fetch bhataparnak/MendixApp MendixApp 8912322e170e5babb4bf77461242ae51b555ca42
+          fetch mendixlabs/TreeViewAndGridView TreeViewAndGridView efe16dc5f35087f98ee4128559bc2a88552b0d81
+      - name: Add the Data Widgets the 9.6 project uses but does not commit
+        # The project uses Data Widgets 2.0.0; 2.0.1 is the oldest release Mendix publishes.
+        # Both variants get the same widgets, so they cannot account for a difference.
+        run: |
+          package="${RUNNER_TEMP}/DataWidgets.mpk"
+          curl -fsSL -o "$package" https://github.com/mendix/widgets-resources/releases/download/data-widgets-v2.0.1/DataWidgets_2_0_1.mpk
+          echo "31c729b38ab8d84db7ab0e979ab10c9ca070a3ed17bb5c93d4f24192a824dbc0  $package" | sha256sum --check
+          mkdir -p "${RUNNER_TEMP}/datawidgets" "${RUNNER_TEMP}/fixtures/MendixApp/widgets"
+          unzip -q "$package" -d "${RUNNER_TEMP}/datawidgets"
+          find "${RUNNER_TEMP}/datawidgets" -name '*.mpk' -exec cp {} "${RUNNER_TEMP}/fixtures/MendixApp/widgets/" \;
+      - name: Rebuild each project through project.rb
+        run: |
+          f="${RUNNER_TEMP}/fixtures"
+          bundle exec ruby script/mxbuild_oracle_inputs "${RUNNER_TEMP}/oracle" \
+            "connector-kit-7.5.0=$f/ConnectorKitDemo/ConnectorKitDemo.mpr" \
+            "query-api-7.17.0=$f/QueryApiBlogPost/QueryApiBlogPost.mpr" \
+            "first-medix-9.6.1=$f/MendixApp/FirstMedix App.mpr" \
+            "grid-view-6.10.8=$f/TreeViewAndGridView/test_6_10_8/GridViewPlayground.mpr"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: oracle-inputs
+          path: ${{ runner.temp }}/oracle
+          retention-days: 7
+
+  mxbuild:
+    needs: prepare
+    runs-on: windows-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: grid-view-6.10.8
+            mxbuild: 6.10.8
+            sha256: 87b1b1f16c6c079482f7341e9fada7a1653af361fed004bea05df6daa8e89a25
+            java: "8"
+          - label: connector-kit-7.5.0
+            mxbuild: 7.5.0
+            sha256: c7a5e78c58c91e05c3c4d7a05ac80d90e5e2e0287b752e049025895e3d23790d
+            java: "8"
+          - label: query-api-7.17.0
+            mxbuild: 7.17.0
+            sha256: e7a71609cc7fb461920ed4288b28e85487150690388fea447fbbce07e6feec9b
+            java: "8"
+          - label: first-medix-9.6.1
+            mxbuild: 9.6.1.29396
+            sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
+            java: "11"
+    name: mxbuild ${{ matrix.mxbuild }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: oracle-inputs
+          path: ${{ runner.temp }}/oracle
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+      - uses: actions/setup-java@v4
+        id: java
+        with:
+          distribution: temurin
+          java-version: ${{ matrix.java }}
+      - name: Install the Visual C++ runtimes SharpSvn in MxBuild 6 and 7 loads
+        shell: pwsh
+        run: choco install vcredist2010 vcredist2012 vcredist2013 --no-progress -y
+      - name: Download official MxBuild ${{ matrix.mxbuild }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'mxbuild.tar.gz'
+          $url = 'https://cdn.mendix.com/runtime/mxbuild-${{ matrix.mxbuild }}.tar.gz'
+          try { Invoke-WebRequest $url -OutFile $archive -UseBasicParsing }
+          catch { Write-Host "::error::GET $url failed: $($_.Exception.Message)"; exit 1 }
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          if ($hash -ne '${{ matrix.sha256 }}') { Write-Host "::error::mxbuild-${{ matrix.mxbuild }}.tar.gz sha256 $hash"; exit 1 }
+          New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/mxbuild" | Out-Null
+          # Linux archives carry symbolic links Windows tar cannot create; MxBuild does not need them.
+          # The Windows tar, not the msys2 one setup-ruby puts first on PATH, which reads D: as a host.
+          $tarOutput = & "$env:SystemRoot\System32\tar.exe" -xzf $archive -C "$env:RUNNER_TEMP/mxbuild" 2>&1
+          $tarExit = $LASTEXITCODE
+          if ($tarExit -ne 0) { Write-Host "::warning::tar exited ${tarExit}: $(($tarOutput | Select-Object -First 5) -join ' | ')" }
+          $exe = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/mxbuild" -Recurse -File |
+            Where-Object { $_.Name -ieq 'mxbuild.exe' } | Select-Object -First 1
+          if ($null -eq $exe) {
+            $names = (Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/mxbuild" -Recurse -File -Filter '*.exe' |
+              Select-Object -First 20 -ExpandProperty Name) -join ', '
+            Write-Host "::error::mxbuild.exe absent from the archive; executables: $names"
+            exit 1
+          }
+          "MXBUILD=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build stored and rebuilt project
+        shell: pwsh
+        run: >-
+          ruby script/mxbuild_oracle "$env:RUNNER_TEMP/oracle"
+          --mxbuild "$env:MXBUILD"
+          --java-home "${{ steps.java.outputs.path }}"
+          --label ${{ matrix.label }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: oracle-${{ matrix.label }}
+          path: |
+            ${{ runner.temp }}/oracle/oracle-*.json
+            ${{ runner.temp }}/oracle/${{ matrix.label }}/*.log
+          retention-days: 14

@@ -172,6 +172,17 @@ chegaram à compilação Java com os mesmos erros de dependências dos originais
 O 9.6.1 manteve paridade de 896 diagnósticos. O 5.21 exato depende de WPF e
 Windows; sua paridade foi verificada pelo conversor oficial 6.10 em memória.
 
+O workflow Legacy MxBuild oracle repete essa verificação no Windows para 6.10.8,
+7.5.0, 7.17.0 e 9.6.1, a partir dos repositórios públicos em commits fixos e com
+arquivos MxBuild de checksum fixo. `script/mxbuild_oracle_inputs` prepara uma
+cópia original e uma reconstruída de cada projeto, e `script/mxbuild_oracle`
+compila as duas: o caso passa quando ambas compilam e a reconstrução não ganha
+erro de consistência; é equivalente quando o original também não compila e a
+reconstrução falha com os mesmos diagnósticos; e falha nos demais casos. Em
+06/11/2026, depois da projeção de campos gravados das #256 e #257, o 6.10.8
+passou e os outros três foram equivalentes. Os mesmos scripts rodam localmente
+os projetos 11.6 privados com o MxBuild de Linux.
+
 ## Limite de confiança
 
 A matriz prova os cenários inspecionados, não compatibilidade universal com
