@@ -118,6 +118,18 @@ RSpec.describe 'stored units through a project.rb round trip' do
     expect(exporter.send(:returned_as_variable?, 'Anything')).to be(true)
   end
 
+  it 'carries the export level an enumeration value stores through Ruby' do
+    caption = { '$ID' => 'caption', 'Items' => [3, { '$ID' => 'text', 'LanguageCode' => 'en_US', 'Text' => 'Open' }] }
+    value = { '$ID' => 'value', 'Name' => 'Open', 'Caption' => caption, 'ExportLevel' => 'Hidden' }
+    source = exporter.send(:enumeration_declaration, name: 'State', id: 'unit', doc: { 'Values' => [3, value] })
+    builder = Mxrb::Dsl::EnumerationBuilder.new('State')
+    builder.value(:Open, export_level: 'Hidden')
+    document = Mxrb::Writer.allocate.send(:enumeration_doc, builder.to_h)
+
+    expect(source).to include('export_level: "Hidden"')
+    expect(document.dig('Values', 1)).to include('ExportLevel' => 'Hidden')
+  end
+
   it 'keeps the export level a module stores' do
     writer = Mxrb::Writer.allocate
     stored = { '$ID' => 'id', '$Type' => 'Projects$ModuleImpl', 'ExportLevel' => 'Source', 'SortIndex' => 1 }
