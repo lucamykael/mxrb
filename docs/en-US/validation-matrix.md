@@ -98,9 +98,10 @@ Stored documents are compared without their element identities, empty or false
 fields, null pointers, and the action or text template a widget value stores when its
 property is not of that kind. Four forms that generators wrote count as what Studio
 Pro stores, because a rebuild writes them that way: a `Class` copying the appearance
-beside it, a sort item's `SortDirection` as `SortOrder`, a page without the `Autofocus`
-the schema defaults to `Off`, and the default marker on six collections. A change to a
-page appears twice, in its summary and as stored.
+beside it, a sort item without `SortOrder` as ascending whatever its `SortDirection`
+says, because MxBuild ignores that field, a page without the `Autofocus` the schema
+defaults to `Off`, and the default marker on six collections. A change to a page appears
+twice, in its summary and as stored. The navigation document is compared as stored too.
 
 UUIDs and visual canvas coordinates are normalized because regeneration may
 legitimately assign new identifiers or positions. Mendix names remain canonical

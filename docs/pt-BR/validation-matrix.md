@@ -87,9 +87,11 @@ foram gravados, sem as identidades de elementos, campos vazios ou falsos, pontei
 nulos e a ação ou o text template que um valor de widget guarda quando sua propriedade
 não é desse tipo. Quatro formas escritas por geradores contam como o que o Studio Pro
 grava, porque uma reconstrução as escreve assim: um `Class` que copia a appearance ao
-lado, o `SortDirection` de um item de ordenação como `SortOrder`, uma página sem o
-`Autofocus` cujo padrão no esquema é `Off`, e o marcador padrão em seis coleções. Uma
-mudança em uma página aparece duas vezes, no resumo e como gravada.
+lado, um item de ordenação sem `SortOrder` como ascendente, seja qual for o seu
+`SortDirection`, porque o MxBuild ignora esse campo, uma página sem o `Autofocus` cujo
+padrão no esquema é `Off`, e o marcador padrão em seis coleções. Uma mudança em uma
+página aparece duas vezes, no resumo e como gravada. O documento de navegação também é
+comparado como gravado.
 
 Os 264 corpos de flows da matriz são emitidos como Ruby tipado. As 133 páginas
 contêm 1.304 nós de 25 tipos; estruturas profundas permanecem hashes Ruby

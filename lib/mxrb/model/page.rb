@@ -887,6 +887,9 @@ module Mxrb
         translations.empty? ? nil : translations
       end
 
+      # MxBuild reads only SortOrder, and compiles an item without it as ascending.
+      def sort_direction(item) = item['SortOrder'].to_s == 'Descending' ? 'Descending' : 'Ascending'
+
       def pluggable_data_source(source)
         if (list = list_source(source))
           return { data_source: list[:entity], source: list }.compact
@@ -898,7 +901,7 @@ module Mxrb
           sort: parse_array(source.dig('SortBar', 'SortItems')).map do |item|
             {
               attribute: item.dig('AttributeRef', 'Attribute'),
-              direction: (item['SortOrder'] || item['SortDirection']).to_s
+              direction: sort_direction(item)
             }.compact
           end
         }.compact
@@ -976,7 +979,7 @@ module Mxrb
         sort = parse_array(source.dig('SortBar', 'SortItems')).map do |item|
           {
             attribute: item.dig('AttributeRef', 'Attribute'),
-            direction: (item['SortOrder'] || item['SortDirection']).to_s
+            direction: sort_direction(item)
           }.compact
         end
         xpath = source['XPathConstraint'].to_s
@@ -1050,8 +1053,7 @@ module Mxrb
         list = list_source(source)
         sort = parse_array(source.dig('SortBar', 'SortItems')).filter_map do |item|
           attribute = item.dig('AttributeRef', 'Attribute')
-          direction = (item['SortOrder'] || item['SortDirection']).to_s == 'Descending' ? 'Descending' : 'Ascending'
-          { attribute:, direction: } if attribute
+          { attribute:, direction: sort_direction(item) } if attribute
         end
         value = {
           type: :data_grid, name: widget['Name'],

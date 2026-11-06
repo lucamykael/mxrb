@@ -96,22 +96,22 @@ RSpec.describe 'Mxrb.compare on stored pages' do
   describe 'the direction of a sort item' do
     def item(fields) = { '$Type' => 'Forms$GridSortItem', **fields }
 
-    it 'reads it under the name a generator gave it' do
-      expect(stored(item('SortDirection' => 'Descending'))).to eq(stored(item('SortOrder' => 'Descending')))
+    it 'ignores SortDirection, which MxBuild compiles as ascending' do
+      expect(stored(item('SortDirection' => 'Descending'))).to eq(stored(item('SortOrder' => 'Ascending')))
     end
 
-    it 'reports a changed direction' do
-      expect(stored(item('SortDirection' => 'Descending'))).not_to eq(stored(item('SortOrder' => 'Ascending')))
+    it 'reports a rebuild that turns it into a descending order' do
+      expect(stored(item('SortDirection' => 'Descending'))).not_to eq(stored(item('SortOrder' => 'Descending')))
     end
 
-    it 'keeps both when both are stored' do
-      both = item('SortOrder' => 'Ascending', 'SortDirection' => 'Descending')
+    it 'reads SortOrder when both are stored' do
+      both = item('SortOrder' => 'Descending', 'SortDirection' => 'Ascending')
 
-      expect(stored(both)).to include('SortOrder' => 'Ascending', 'SortDirection' => 'Descending')
+      expect(stored(both)).to eq(stored(item('SortOrder' => 'Descending')))
     end
 
-    it 'leaves an item without a direction alone' do
-      expect(stored(item('AttributeRef' => 'App.Item.Name'))).not_to include('SortOrder')
+    it 'reads an item without a direction as ascending' do
+      expect(stored(item('AttributeRef' => 'App.Item.Name'))).to include('SortOrder' => 'Ascending')
     end
 
     it 'leaves the same field of another type alone' do

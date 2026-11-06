@@ -2714,9 +2714,13 @@ module Mxrb
       end
       editable['AppIcon'] = profile[:app_icon] unless profile[:app_icon].nil?
       unless profile.fetch(:app_title, {}).empty?
-        editable['AppTitle'] = translated_text_doc(
-          profile.fetch(:app_title), previous: previous['AppTitle']
-        )
+        if previous.key?('ApplicationTitle')
+          editable['ApplicationTitle'] = profile.fetch(:app_title).values.first.to_s
+        else
+          editable['AppTitle'] = translated_text_doc(
+            profile.fetch(:app_title), previous: previous['AppTitle']
+          )
+        end
       end
       if profile[:sign_in_page] || !profile.fetch(:sign_in_title, {}).empty? ||
          profile[:sign_in_location]
@@ -2901,11 +2905,9 @@ module Mxrb
       item ||= attributes
       previous ||= {}
       action = if item[:page]
-                 form_action_doc(item.fetch(:page), previous: previous['Action'])
+                 navigation_page_action_doc(item, previous: previous['Action'])
                elsif item[:microflow]
-                 navigation_microflow_action_doc(
-                   item.fetch(:microflow), previous: previous['Action']
-                 )
+                 navigation_microflow_action_doc(item, previous: previous['Action'])
                else
                  prior = previous['Action'] || {}
                  { '$ID' => prior['$ID'] || SecureRandom.uuid,
@@ -2930,6 +2932,10 @@ module Mxrb
         return { '$ID' => previous&.fetch('$ID', nil) || SecureRandom.uuid,
                  '$Type' => 'Forms$IconCollectionIcon', 'Image' => icon.fetch(:collection).to_s }
       end
+      if icon.is_a?(Hash) && icon.key?(:image)
+        return { '$ID' => previous&.fetch('$ID', nil) || SecureRandom.uuid,
+                 '$Type' => 'Forms$ImageIcon', 'Image' => icon.fetch(:image).to_s }
+      end
 
       code = icon.is_a?(Integer) ? icon : GLYPH_ICON_CODES[icon.to_s.downcase]
       raise ArgumentError, "unsupported navigation icon #{icon.inspect}" unless code
@@ -2939,18 +2945,72 @@ module Mxrb
         '$Type' => 'Forms$GlyphIcon', 'Code' => code }
     end
 
-    def navigation_microflow_action_doc(microflow, previous: nil)
+    # What the declaration leaves out keeps its stored value: a menu item in Ruby
+    # names only what differs from Studio Pro's defaults.
+    def navigation_page_action_doc(item, previous: nil)
+      previous ||= {}
+      prior = previous['FormSettings'] || {}
+      document = form_action_doc(item.fetch(:page), previous:)
+      document['DisabledDuringExecution'] =
+        item.fetch(:disabled_during_execution, previous.fetch('DisabledDuringExecution', false))
+      settings = document.fetch('FormSettings')
+      location = item[:location] || prior['Location']
+      settings['Location'] = location if location
+      if item.key?(:title)
+        settings.delete('TitleOverride') if navigation_title_field == 'FormTitle'
+        settings[navigation_title_field] = navigation_title_doc(item.fetch(:title), previous: prior[navigation_title_field])
+      elsif prior.key?(navigation_title_field)
+        settings[navigation_title_field] = prior.fetch(navigation_title_field)
+      end
+      document
+    end
+
+    def navigation_title_field
+      navigation_major_version >= 8 ? 'TitleOverride' : 'FormTitle'
+    end
+
+    def navigation_title_doc(translations, previous: nil)
+      return navigation_text_template_doc(translations, previous:) if navigation_major_version >= 11
+
+      translated_text_doc(translations, previous:)
+    end
+
+    def navigation_major_version = @definition[:version].to_s.split('.').first.to_i
+
+    def navigation_microflow_action_doc(item, previous: nil)
       previous ||= {}
       settings = previous['MicroflowSettings'] || {}
-      {
+      document = {
         '$ID' => previous['$ID'] || SecureRandom.uuid,
         '$Type' => previous['$Type'] || 'Forms$MicroflowAction',
         'MicroflowSettings' => {
+          'Asynchronous' => false, 'ConfirmationInfo' => nil, 'FormValidations' => 'All',
+          'ProgressBar' => 'None', 'ProgressMessage' => nil
+        }.merge(settings).merge(
           '$ID' => settings['$ID'] || SecureRandom.uuid,
           '$Type' => settings['$Type'] || 'Forms$MicroflowSettings',
-          'Microflow' => microflow
-        }
+          'Microflow' => item.fetch(:microflow)
+        ).merge(navigation_microflow_options(item, settings))
       }
+      document['DisabledDuringExecution'] = true if item[:disabled_during_execution]
+      document
+    end
+
+    def navigation_microflow_options(item, settings)
+      options = { 'FormValidations' => item[:form_validations], 'ProgressBar' => item[:progress_bar],
+                  'Asynchronous' => item[:asynchronous], 'UseAllPages' => item[:use_all_pages] }.compact
+      if item[:progress_message]
+        options['ProgressMessage'] = translated_text_doc(item[:progress_message], previous: settings['ProgressMessage'])
+      end
+      options['ConfirmationInfo'] = navigation_confirmation_doc(item[:confirmation]) if item[:confirmation]
+      options
+    end
+
+    def navigation_confirmation_doc(confirmation)
+      { '$ID' => SecureRandom.uuid, '$Type' => 'Forms$ConfirmationInfo',
+        'Question' => translated_text_doc(confirmation.fetch(:question)),
+        'ProceedButtonCaption' => translated_text_doc(confirmation.fetch(:proceed)),
+        'CancelButtonCaption' => translated_text_doc(confirmation.fetch(:cancel)) }
     end
 
     def translated_text_doc(translations, previous: nil)
