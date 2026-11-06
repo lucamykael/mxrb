@@ -106,8 +106,9 @@ jobs:
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
           Write-Host "::notice::mxbuild-${{ matrix.mxbuild }}.tar.gz sha256 $hash"
           New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/mxbuild" | Out-Null
-          tar -xzf $archive -C "$env:RUNNER_TEMP/mxbuild"
-          if ($LASTEXITCODE -ne 0) { Write-Host '::error::Cannot extract MxBuild'; exit 1 }
+          # Linux archives carry symbolic links Windows tar cannot create; MxBuild does not need them.
+          $tarOutput = (tar -xzf $archive -C "$env:RUNNER_TEMP/mxbuild" 2>&1 | Select-Object -First 5) -join ' | '
+          if ($LASTEXITCODE -ne 0) { Write-Host "::warning::tar exited $LASTEXITCODE (size $((Get-Item $archive).Length)): $tarOutput" }
           $exe = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/mxbuild" -Recurse -File |
             Where-Object { $_.Name -ieq 'mxbuild.exe' } | Select-Object -First 1
           if ($null -eq $exe) {
