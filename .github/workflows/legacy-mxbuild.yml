@@ -98,14 +98,24 @@ jobs:
       - name: Download official MxBuild ${{ matrix.mxbuild }}
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'mxbuild.tar.gz'
-          Invoke-WebRequest "https://cdn.mendix.com/runtime/mxbuild-${{ matrix.mxbuild }}.tar.gz" -OutFile $archive
-          Write-Host ('mxbuild-${{ matrix.mxbuild }}.tar.gz sha256 ' + (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant())
+          $url = 'https://cdn.mendix.com/runtime/mxbuild-${{ matrix.mxbuild }}.tar.gz'
+          try { Invoke-WebRequest $url -OutFile $archive -UseBasicParsing }
+          catch { Write-Host "::error::GET $url failed: $($_.Exception.Message)"; exit 1 }
+          $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
+          Write-Host "::notice::mxbuild-${{ matrix.mxbuild }}.tar.gz sha256 $hash"
           New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/mxbuild" | Out-Null
           tar -xzf $archive -C "$env:RUNNER_TEMP/mxbuild"
-          if ($LASTEXITCODE -ne 0) { throw 'Cannot extract MxBuild' }
-          $exe = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/mxbuild" -Recurse -File -Filter 'mxbuild.exe' | Select-Object -First 1
-          if ($null -eq $exe) { throw 'mxbuild.exe absent from the archive' }
+          if ($LASTEXITCODE -ne 0) { Write-Host '::error::Cannot extract MxBuild'; exit 1 }
+          $exe = Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/mxbuild" -Recurse -File |
+            Where-Object { $_.Name -ieq 'mxbuild.exe' } | Select-Object -First 1
+          if ($null -eq $exe) {
+            $names = (Get-ChildItem -LiteralPath "$env:RUNNER_TEMP/mxbuild" -Recurse -File -Filter '*.exe' |
+              Select-Object -First 20 -ExpandProperty Name) -join ', '
+            Write-Host "::error::mxbuild.exe absent from the archive; executables: $names"
+            exit 1
+          }
           "MXBUILD=$($exe.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
       - name: Build stored and rebuilt project
         shell: pwsh
