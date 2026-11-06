@@ -1,8 +1,10 @@
 name: Legacy MxBuild oracle
 
 # Builds public projects of Mendix versions older than 10 with the official MxBuild of
-# their own version, as stored and as rebuilt through project.rb, and fails when the
-# rebuild does not build or gains a consistency error.
+# their own version, as stored and as rebuilt through project.rb (see script/mxbuild_oracle).
+# On 2026-11-06, 6.10.8 built both ways; 7.5.0 and 7.17.0 passed the model check both ways
+# and stopped at javac on jars the repositories do not commit; 9.6.1 reported the same
+# theme and layout errors both ways.
 
 on:
   pull_request:
@@ -52,11 +54,10 @@ jobs:
         run: |
           package="${RUNNER_TEMP}/DataWidgets.mpk"
           curl -fsSL -o "$package" https://github.com/mendix/widgets-resources/releases/download/data-widgets-v2.0.1/DataWidgets_2_0_1.mpk
-          echo "::notice::DataWidgets_2_0_1.mpk sha256 $(sha256sum "$package" | cut -d' ' -f1)"
+          echo "31c729b38ab8d84db7ab0e979ab10c9ca070a3ed17bb5c93d4f24192a824dbc0  $package" | sha256sum --check
           mkdir -p "${RUNNER_TEMP}/datawidgets" "${RUNNER_TEMP}/fixtures/MendixApp/widgets"
           unzip -q "$package" -d "${RUNNER_TEMP}/datawidgets"
           find "${RUNNER_TEMP}/datawidgets" -name '*.mpk' -exec cp {} "${RUNNER_TEMP}/fixtures/MendixApp/widgets/" \;
-          echo "::notice::widgets $(ls "${RUNNER_TEMP}/fixtures/MendixApp/widgets" | tr '\n' ' ')"
       - name: Rebuild each project through project.rb
         run: |
           f="${RUNNER_TEMP}/fixtures"
@@ -81,15 +82,19 @@ jobs:
         include:
           - label: grid-view-6.10.8
             mxbuild: 6.10.8
+            sha256: 87b1b1f16c6c079482f7341e9fada7a1653af361fed004bea05df6daa8e89a25
             java: "8"
           - label: connector-kit-7.5.0
             mxbuild: 7.5.0
+            sha256: c7a5e78c58c91e05c3c4d7a05ac80d90e5e2e0287b752e049025895e3d23790d
             java: "8"
           - label: query-api-7.17.0
             mxbuild: 7.17.0
+            sha256: e7a71609cc7fb461920ed4288b28e85487150690388fea447fbbce07e6feec9b
             java: "8"
           - label: first-medix-9.6.1
             mxbuild: 9.6.1.29396
+            sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
             java: "11"
     name: mxbuild ${{ matrix.mxbuild }}
     steps:
@@ -118,7 +123,7 @@ jobs:
           try { Invoke-WebRequest $url -OutFile $archive -UseBasicParsing }
           catch { Write-Host "::error::GET $url failed: $($_.Exception.Message)"; exit 1 }
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
-          Write-Host "::notice::mxbuild-${{ matrix.mxbuild }}.tar.gz sha256 $hash"
+          if ($hash -ne '${{ matrix.sha256 }}') { Write-Host "::error::mxbuild-${{ matrix.mxbuild }}.tar.gz sha256 $hash"; exit 1 }
           New-Item -ItemType Directory -Path "$env:RUNNER_TEMP/mxbuild" | Out-Null
           # Linux archives carry symbolic links Windows tar cannot create; MxBuild does not need them.
           # The Windows tar, not the msys2 one setup-ruby puts first on PATH, which reads D: as a host.

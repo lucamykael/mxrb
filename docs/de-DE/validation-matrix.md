@@ -116,6 +116,17 @@ Parität. Die exakte 5.21-Prüfung bleibt wegen WPF auf Windows/Studio Pro eine
 ausdrückliche MXRB-Einschränkung und gehört nicht zum direkten automatischen
 Gate.
 
+Der Workflow Legacy MxBuild oracle wiederholt die Prüfung für 6.10.8, 7.5.0,
+7.17.0 und 9.6.1 unter Windows, aus den öffentlichen Repositories mit fixierten
+Commits und MxBuild-Archiven mit fixierter Prüfsumme. `script/mxbuild_oracle_inputs`
+erzeugt je Projekt eine gespeicherte und eine rekonstruierte Kopie,
+`script/mxbuild_oracle` baut beide: Ein Fall besteht, wenn beide bauen und die
+Rekonstruktion keinen neuen Konsistenzfehler hat; er ist äquivalent, wenn auch das
+Original nicht baut und die Rekonstruktion mit denselben Diagnosen scheitert; sonst
+schlägt er fehl. Am 06.11.2026, nach der Projektion gespeicherter Felder aus #256
+und #257, bestand 6.10.8, die übrigen drei waren äquivalent. Dieselben Skripte
+prüfen die privaten 11.6-Projekte lokal mit dem Linux-MxBuild.
+
 Das dedizierte Konstanten-Gate materialisiert String, Boolean, DateTime,
 Decimal und Integer/Long. Zwei MPR → Ruby → MPR-Zyklen bewahren Semantik sowie
 Unit- und Typ-ID; MxBuild 11.12.1 paketiert das Ergebnis erfolgreich. DateTime

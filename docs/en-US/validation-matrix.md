@@ -234,6 +234,16 @@ with identical resources:
 | GridViewPlayground 6.10.8 | MxBuild 6.10.8 | **BUILD SUCCEEDED** for both original and rebuilt |
 | TreeviewDemo 5.21.4 | MxBuild 6.10.8 with `--loose-version-check` | exact normalized diagnostic parity: 1 error, 6 warnings and 8 deprecations |
 
+The Legacy MxBuild oracle workflow repeats this check on Windows for the 6.10.8,
+7.5.0, 7.17.0 and 9.6.1 rows, from the public repositories at pinned commits and
+with pinned MxBuild archives. `script/mxbuild_oracle_inputs` prepares a stored and
+a rebuilt copy of each project, and `script/mxbuild_oracle` builds both: a case
+passes when both build and the rebuild adds no consistency error, is equivalent
+when the stored project cannot be built either and the rebuild fails with the same
+diagnostics, and fails otherwise. On 2026-11-06, after the stored-field projection
+of #256 and #257, 6.10.8 passed and the other three were equivalent, as in the
+table. The same scripts run the private 11.6 projects locally with the Linux MxBuild.
+
 The rebuilt GridView MDA is 1,501,038 bytes with SHA-256
 `b92646e2a2ce47f8808b9c0624b7c68b3f11f962fefa5be28c5600f0cb628416`.
 MDA archives are not expected to be byte-identical because generated package
