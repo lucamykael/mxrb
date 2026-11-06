@@ -22,6 +22,7 @@ module Mxrb
       def synchronize!
         Registry.reset!
         project = Model::Project.open(@target, readonly: false)
+        @stored_units = stored_units(project.mpr)
         Environment.load(root: @root).with do
           identity_project = project if @rebase_member_identities
           @source_identities = RubyApp.load_sources(@manifest, member_identity_project: identity_project)
@@ -58,12 +59,45 @@ module Mxrb
 
       private
 
-      def finalize_studio_schema!(project)
-        return if StudioCompatibility.new(project.mendix_version).schema_hash.empty?
+      def stored_units(mpr) = mpr.all_units.to_h { [_1.fetch('UnitID'), mpr.parse_contents(_1)] }
 
-        project.mpr.transaction do
-          project.mpr.apply_studio_compatibility!
-          project.mpr.update_version!(project.mendix_version)
+      # The schema of the version applies to what synchronization wrote. A unit it left
+      # alone stays as stored, and a rebuild of a version whose projects store exactly
+      # its fields writes only those (see StoredFields).
+      def finalize_studio_schema!(project)
+        mpr = project.mpr
+        version = project.mendix_version
+        compatibility = StudioCompatibility.new(version)
+        unless compatibility.schema_hash.empty?
+          untouched = stored_units(mpr).select { |id, document| schema_only_change?(compatibility, id, document) }.keys
+          mpr.transaction do
+            mpr.apply_studio_compatibility!
+            untouched.each { mpr.write_unit_as_stored(_1, @stored_units.fetch(_1)) }
+            mpr.update_version!(version)
+          end
+        end
+        project_onto_stored_fields(mpr, version)
+      end
+
+      # Synchronization rewrites documents through the schema projection, so a document
+      # whose only change is that projection was not changed by the Ruby sources.
+      def schema_only_change?(compatibility, id, document)
+        stored = @stored_units[id]
+        return false unless stored
+        return true if stored == document
+
+        compatibility.apply_document!(Marshal.load(Marshal.dump(stored))) == document
+      end
+
+      def project_onto_stored_fields(mpr, version)
+        return unless StoredFields.applies_to?(version)
+
+        fields = StoredFields.from(@stored_units.values, version:)
+        mpr.transaction do
+          mpr.all_units.each do |unit|
+            document = mpr.parse_contents(unit)
+            mpr.write_unit_as_stored(unit.fetch('UnitID'), document) if fields.project!(document)
+          end
         end
       end
 

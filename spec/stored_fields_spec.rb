@@ -25,6 +25,18 @@ RSpec.describe Mxrb::StoredFields do
     expect(rebuilt).to eq(stored.first)
   end
 
+  it 'stores a list under the marker the project always uses for that field' do
+    pages = [{ '$Type' => 'Forms$Page', 'Variables' => [3] }, { '$Type' => 'Forms$Page', 'Variables' => [3] },
+             { '$Type' => 'Forms$Snippet', 'Variables' => [3] }, { '$Type' => 'Forms$Snippet', 'Variables' => [2] }]
+    page = { '$Type' => 'Forms$Page', 'Variables' => [2] }
+    snippet = { '$Type' => 'Forms$Snippet', 'Variables' => [2, { '$Type' => 'Forms$PageVariable' }] }
+
+    expect(fields(pages).project!(page)).to be(true)
+    expect(page).to eq('$Type' => 'Forms$Page', 'Variables' => [3])
+    expect(fields(pages).project!(snippet)).to be(false)
+    expect(fields(pages).project!({ '$Type' => 'Forms$Page', 'Variables' => [3] })).to be(false)
+  end
+
   it 'leaves types it has not seen and documents without a change alone' do
     unseen = { '$ID' => 'x', '$Type' => 'Microflows$Rule', 'ExportLevel' => 'Hidden' }
     same = Marshal.load(Marshal.dump(stored.first))

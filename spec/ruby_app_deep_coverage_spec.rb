@@ -508,7 +508,7 @@ RSpec.describe 'Ruby application internal contracts' do
   it 'covers native bridge cleanup and entity synchronization validation' do
     scheduler = double(jobs: [], shutdown: nil)
     store = double(close: nil)
-    project = double(close: nil, all_units: [], modules: [])
+    project = double(close: nil, all_units: [], modules: [], mpr: double(all_units: []))
     bridge = Mxrb::RubyApp::NativeBridge.allocate
     bridge.instance_variable_set(:@scheduler, scheduler)
     bridge.instance_variable_set(:@store, store)
@@ -839,7 +839,7 @@ RSpec.describe 'Ruby application internal contracts' do
     sync.instance_variable_set(
       :@manifest, double(root: '/tmp/none', modules: [], data: {}, absolute_path: '/tmp/none/project.rb')
     )
-    project = double(close: nil, all_units: [], modules: [])
+    project = double(close: nil, all_units: [], modules: [], mpr: double(all_units: []))
     allow(Mxrb::Model::Project).to receive(:open).and_return(project)
     allow(sync).to receive(:synchronize_entities).and_raise(Mxrb::ValidationError, 'stop')
     expect { sync.synchronize! }.to raise_error(Mxrb::ValidationError)

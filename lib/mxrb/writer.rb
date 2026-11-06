@@ -1804,13 +1804,13 @@ module Mxrb
         ruby_enumeration_value_doc(value, previous: prior)
       end
 
-      current.merge(
+      # A new enumeration gets the defaults; a stored one keeps the fields it stores.
+      defaults = previous ? {} : { 'Excluded' => false, 'ExportLevel' => 'Hidden' }
+      defaults.merge(current).merge(
         '$ID' => id,
         '$Type' => current['$Type'] || 'Enumerations$Enumeration',
         'Name' => declaration.fetch(:name).to_s,
         'Documentation' => declaration.fetch(:documentation, '').to_s,
-        'Excluded' => current.fetch('Excluded', false),
-        'ExportLevel' => current.fetch('ExportLevel', 'Hidden'),
         'Values' => IO::BsonCodec.build_array(values, marker: values_payload.fetch(:marker))
       )
     end
@@ -4578,7 +4578,10 @@ module Mxrb
       if entity[:lifecycle].nil?
         doc[events_key] ||= IO::BsonCodec.build_array([])
       else
-        doc[events_key] = IO::BsonCodec.build_array(entity.fetch(:lifecycle).map { lifecycle_doc(_1) })
+        stored = array_items(previous&.dig(events_key)).group_by { lifecycle_signature(_1) }
+        doc[events_key] = IO::BsonCodec.build_array(
+          entity.fetch(:lifecycle).map { lifecycle_doc(_1, previous: stored[_1.fetch(:event).to_s.to_sym]&.first) }
+        )
       end
       if entity[:generalization]
         doc[generalization_key] = generalization_doc(entity.fetch(:generalization))
@@ -4746,7 +4749,10 @@ module Mxrb
             validation_rule_doc(module_name, entity.fetch(:name), attribute.fetch(:name), kind)
         end
       end
-      IO::BsonCodec.build_array(kept + generated)
+      # Stored rules keep their order, which decides the message a user sees first.
+      positions = existing.each_with_index.to_h.compare_by_identity
+      rules = (kept + generated).each_with_index.sort_by { |rule, index| [positions.fetch(rule, existing.size), index] }
+      IO::BsonCodec.build_array(rules.map(&:first))
     end
 
     def validation_declaration_matches?(attribute, rule)
@@ -4893,8 +4899,8 @@ module Mxrb
         'Documentation' => association.fetch(:documentation, ''),
         'ParentPointer' => from_id,
         'ChildPointer' => to_id,
-        'ParentConnection' => '0;50',
-        'ChildConnection' => '100;50',
+        'ParentConnection' => previous&.dig('ParentConnection') || '0;50',
+        'ChildConnection' => previous&.dig('ChildConnection') || '100;50',
         'GUID' => previous&.dig('GUID') || SecureRandom.uuid,
         'Type' => association.fetch(:type).to_s,
         'Owner' => association.fetch(:owner, :Default).to_s,
@@ -4943,17 +4949,22 @@ module Mxrb
       doc
     end
 
-    def lifecycle_doc(callback)
+    # The stored handler keeps its identity, its fields and the name it stores the
+    # event under, which differs between projects.
+    def lifecycle_doc(callback, previous: nil)
+      previous ||= {}
       event, moment = callback.fetch(:event).to_s.split('_', 2)
-      {
-        '$ID' => callback.fetch(:id, nil).to_s.empty? ? SecureRandom.uuid : callback.fetch(:id).to_s,
+      type_key = native_existing_key(previous, 'Type', 'Event') || 'Type'
+      id = callback.fetch(:id, nil).to_s
+      previous.except('Type', 'Event').merge(
+        '$ID' => id.empty? ? previous['$ID'] || SecureRandom.uuid : id,
         '$Type' => 'DomainModels$EventHandler',
-        'Type' => %w[before after].include?(event) ? moment.capitalize : event.capitalize,
+        type_key => %w[before after].include?(event) ? moment.capitalize : event.capitalize,
         'Moment' => event.capitalize,
         'Microflow' => callback.fetch(:handler),
         'PassEventObject' => callback.fetch(:pass_event_object, true) == true,
         'RaiseErrorOnFalse' => callback.fetch(:raise_error_on_false, event == 'before') == true
-      }
+      )
     end
 
     def page_baseline(mpr, candidates, page)

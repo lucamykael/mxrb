@@ -82,8 +82,9 @@ mehr als Mendix-Unit-Identität fehlklassifiziert.
 ## Tiefe Abdeckung
 
 Der Vergleich umfasst Metadaten, Security, Unit-Baum, Entitäten,
-Zugriffsregeln, Beziehungen, Seiten, Widgets, Events, Menüs und vollständige
-Microflow-/Nanoflow-Körper. 264 Flow-Körper und 1.304 Seitenknoten aus 25 Typen
+Zugriffsregeln, Beziehungen, Seiten, Widgets, Events, Menüs, vollständige
+Microflow-/Nanoflow-Körper und jede weitere Unit wie gespeichert, benannt nach ihren
+Containern, ihrem Namen und ihrem Typ. 264 Flow-Körper und 1.304 Seitenknoten aus 25 Typen
 sind als bearbeitbares Ruby repräsentiert. Jede native Unit besitzt zusätzlich
 einen vollständigen bearbeitbaren Eintrag in `.mxrb/native_units.rb`.
 Seiten, Layouts, Page Templates, Building Blocks und Snippets werden wie gespeichert
@@ -97,13 +98,14 @@ was sein `SortDirection` sagt, weil MxBuild dieses Feld ignoriert, eine Seite oh
 Sammlungen. Eine Änderung an einer Seite erscheint zweimal, in der Zusammenfassung und
 wie gespeichert. Auch das Navigationsdokument wird wie gespeichert verglichen.
 
-Da leere Felder ausgelassen werden, zeigt der Vergleich kein leeres Feld, das ein
-Neuaufbau hinzufügt oder entfernt. Ein Neuaufbau für dieselbe Mendix-Version schreibt
-deshalb je Elementtyp nur die Felder, die das Projekt dort speichert. Sie werden aus
-den exportierten Units und dem Studio-Pro-Template der Version gelernt, weil Studio
-Pro jede Eigenschaft einer Version speichert. Ausgenommen sind Mendix 10.24.0 und
-11.12.1: Der Writer folgt ihren Schemas, und Generatoren können Felder auslassen, die
-sie haben.
+Ein Neuaufbau für dieselbe Mendix-Version schreibt je Elementtyp nur die Felder, die
+das Projekt dort speichert, mit dem Sammlungsmarker, den das Projekt für dieses Feld
+immer verwendet. Sie werden aus den exportierten Units und dem Studio-Pro-Template der
+Version gelernt, weil Studio Pro jede Eigenschaft einer Version speichert. Für diese
+Versionen werden gespeicherte Dokumente mit ihren leeren und falschen Feldern
+verglichen, sodass ein hinzugefügtes oder entferntes Feld sichtbar wird. Mendix 10.24.0
+und 11.12.1 sind von beidem ausgenommen: Der Writer folgt ihren Schemas, und
+Generatoren können Felder auslassen, die sie haben.
 
 ## Offizielle Gates
 

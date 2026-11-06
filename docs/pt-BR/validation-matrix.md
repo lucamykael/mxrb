@@ -81,7 +81,8 @@ widgets deixaram de ser confundidos com identidade de unit.
 
 O comparador cobre metadados, segurança, árvore de units, entidades, access
 rules, associações, páginas, widgets, eventos, menus, layouts, page templates,
-building blocks, snippets e corpos completos de microflows/nanoflows. UUIDs e
+building blocks, snippets, corpos completos de microflows/nanoflows e todas as demais
+units como gravadas, nomeadas pelos seus containers, nome e tipo. UUIDs e
 coordenadas visuais são normalizados. Páginas e esses documentos são comparados como
 foram gravados, sem as identidades de elementos, campos vazios ou falsos, ponteiros
 nulos e a ação ou o text template que um valor de widget guarda quando sua propriedade
@@ -93,13 +94,14 @@ padrão no esquema é `Off`, e o marcador padrão em seis coleções. Uma mudan�
 página aparece duas vezes, no resumo e como gravada. O documento de navegação também é
 comparado como gravado.
 
-Como campos vazios ficam de fora, a comparação não mostra um campo vazio que uma
-reconstrução acrescenta ou remove. Por isso uma reconstrução para a mesma versão do
-Mendix grava em cada tipo de elemento só os campos que o projeto guarda nele,
-aprendidos das units exportadas e do template do Studio Pro da versão, já que o
-Studio Pro grava todas as propriedades que uma versão tem. Mendix 10.24.0 e 11.12.1
-ficam de fora: o writer segue os esquemas dessas versões, e geradores podem omitir
-campos que elas têm.
+Uma reconstrução para a mesma versão do Mendix grava em cada tipo de elemento só os
+campos que o projeto guarda nele, com o marcador de coleção que o projeto sempre usa
+naquele campo. Eles são aprendidos das units exportadas e do template do Studio Pro da
+versão, já que o Studio Pro grava todas as propriedades que uma versão tem. Nessas
+versões os documentos gravados são comparados com os campos vazios e falsos, então um
+campo acrescentado ou removido aparece. Mendix 10.24.0 e 11.12.1 ficam fora das duas
+regras: o writer segue os esquemas dessas versões, e geradores podem omitir campos que
+elas têm.
 
 Os 264 corpos de flows da matriz são emitidos como Ruby tipado. As 133 páginas
 contêm 1.304 nós de 25 tipos; estruturas profundas permanecem hashes Ruby

@@ -301,7 +301,7 @@ module Mxrb
           objects = Array(flow.objects)
           graph = Array(flow.flows)
           fingerprint = if editable_flow_body?(objects, graph)
-                          lines = body_dsl_lines(objects, graph, 2)
+                          lines = with_flow_return_variable(flow) { body_dsl_lines(objects, graph, 2) }
                           flow_body_fingerprint(lines, flow)
                         end
           return_type = flow.respond_to?(:return_type_document) && flow.return_type_document
