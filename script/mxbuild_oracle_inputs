@@ -1,0 +1,88 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+# Prepares inputs for script/mxbuild_oracle: for each MPR, a copy of its project
+# directory as stored ("source") and a copy whose model is the project.rb rebuild of
+# the same Mendix version ("rebuilt"). Every other project file is identical, so MxBuild
+# judges only the model.
+#
+#   script/mxbuild_oracle_inputs OUTPUT LABEL=PATH/TO/App.mpr [...]
+
+require 'fileutils'
+require 'json'
+require 'tmpdir'
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require_relative '../lib/mxrb'
+
+# Builds the source and rebuilt copies of each project.
+module MxbuildOracleInputs
+  SKIPPED = %w[.git .svn deployment releases .mendix-cache theme-cache].freeze
+
+  module_function
+
+  def generate(output, specs)
+    raise ArgumentError, 'output already exists' if File.exist?(output)
+    raise ArgumentError, 'give at least one LABEL=MPR' if specs.empty?
+
+    FileUtils.mkdir_p(output)
+    cases = specs.map { |spec| prepare(output, *spec.split('=', 2)) }
+    File.write(File.join(output, 'cases.json'), JSON.pretty_generate(cases))
+    puts JSON.generate(output:, cases: cases.map { _1.fetch(:label) })
+  end
+
+  def prepare(output, label, mpr)
+    raise ArgumentError, "invalid label: #{label}" unless label.to_s.match?(/\A[A-Za-z0-9._-]+\z/)
+    raise ArgumentError, "#{mpr}: MPR not found" unless mpr && File.file?(mpr)
+
+    version = Mxrb.open(mpr, &:mendix_version)
+    source = copy_project(mpr, File.join(output, label, 'source'))
+    rebuilt = copy_project(mpr, File.join(output, label, 'rebuilt'))
+    rebuild(mpr, rebuilt)
+    { label:, version: version.to_s, mpr: File.basename(mpr), source:, rebuilt: }
+      .transform_values { _1.start_with?(output) ? _1.delete_prefix("#{output}/") : _1 }
+  end
+
+  # Copies the project directory, MPR included, without generated or version-control
+  # folders. Returns the copied directory.
+  def copy_project(mpr, destination)
+    root = File.dirname(File.expand_path(mpr))
+    FileUtils.mkdir_p(destination)
+    Dir.children(root).each do |entry|
+      next if SKIPPED.include?(entry)
+
+      FileUtils.cp_r(File.join(root, entry), destination)
+    end
+    destination
+  end
+
+  # Replaces the model in the copied project by its project.rb rebuild.
+  def rebuild(mpr, project)
+    Dir.mktmpdir('mxrb-oracle-') do |directory|
+      target = File.join(directory, 'model', File.basename(mpr))
+      write_rebuild(mpr, File.join(directory, 'ruby'), target)
+      FileUtils.cp(target, project)
+      contents = File.join(File.dirname(target), 'mprcontents')
+      next unless File.directory?(contents)
+
+      FileUtils.rm_rf(File.join(project, 'mprcontents'))
+      FileUtils.cp_r(contents, project)
+    end
+  end
+
+  # Exports the MPR to Ruby and writes its rebuild to target, under the same file name.
+  def write_rebuild(mpr, exported, target)
+    FileUtils.mkdir_p(File.dirname(target))
+    Mxrb::Exporter.new(mpr, exported).export!
+    with_output_path(target) { load File.join(exported, 'project.rb') }
+  end
+
+  def with_output_path(path)
+    previous = ENV.fetch('MXRB_OUTPUT_PATH', nil)
+    ENV['MXRB_OUTPUT_PATH'] = path
+    yield
+  ensure
+    previous ? ENV['MXRB_OUTPUT_PATH'] = previous : ENV.delete('MXRB_OUTPUT_PATH')
+  end
+end
+
+MxbuildOracleInputs.generate(ARGV.shift, ARGV) if $PROGRAM_NAME == __FILE__
