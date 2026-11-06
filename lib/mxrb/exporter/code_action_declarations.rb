@@ -96,6 +96,7 @@ module Mxrb
           id: document_id(info), caption: info.fetch('Caption', ''),
           category: info.fetch('Category', '')
         }
+        spec[:icon_image] = info.fetch('Icon') if info.key?('Icon')
         {
           'IconData' => :icon, 'IconDataDark' => :icon_dark,
           'ImageData' => :image, 'ImageDataDark' => :image_dark

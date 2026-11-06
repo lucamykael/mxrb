@@ -2913,7 +2913,8 @@ module Mxrb
                  { '$ID' => prior['$ID'] || SecureRandom.uuid,
                    '$Type' => prior['$Type'] || 'Forms$NoAction' }
                end
-      {
+      # Fields Ruby does not describe, such as the documentation Mendix 5 stores, stay.
+      previous.merge(
         '$ID' => previous['$ID'] || SecureRandom.uuid,
         '$Type' => previous['$Type'] || 'Menus$MenuItem',
         'Caption' => translated_text_doc(item.fetch(:caption), previous: previous['Caption']),
@@ -2922,7 +2923,7 @@ module Mxrb
         'Items' => navigation_array(item.fetch(:items, []), previous['Items']) do |child, prior|
           navigation_menu_item_doc(child, previous: prior)
         end
-      }
+      )
     end
 
     def glyph_icon_doc(icon, previous: nil)
@@ -4497,10 +4498,7 @@ module Mxrb
         'FromAppStore' => current.fetch('FromAppStore', false),
         'Name' => name,
         'NewSortIndex' => current.fetch('NewSortIndex', index.to_f)
-      ).tap do |doc|
-        doc.delete('SortIndex')
-        doc.delete('ExportLevel')
-      end
+      ).tap { _1.delete('SortIndex') }
     end
 
     def entity_doc(entity, module_name, previous, index, access_associations: [])

@@ -117,7 +117,7 @@ RSpec.describe Mxrb::Exporter, 'remaining edge contracts' do
     }
     source = exporter.send(:dataset_declaration, document)
     expect(source).to include('object_of(', 'enum_of(', 'allow "App.User" do',
-                              'enabled: false', 'OQL, ieiq: true')
+                              'enabled: false', 'oql <<~OQL.chomp, ieiq: true')
     expect(exporter.send(:dataset_type_source, '$Type' => 'DataTypes$StringType')).to eq('string')
   end
 

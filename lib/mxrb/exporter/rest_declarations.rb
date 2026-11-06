@@ -17,6 +17,22 @@ module Mxrb
                              })
       end
 
+      # Mendix 7 stored mappings in a shape the declaration does not describe: a parameter
+      # and entity structure on the mapping, and a path and XML type on each element.
+      LEGACY_MAPPING_FIELDS = %w[Parameter EntityStructure].freeze
+      LEGACY_MAPPING_ELEMENT_FIELDS = %w[Path XmlType].freeze
+      private_constant :LEGACY_MAPPING_FIELDS, :LEGACY_MAPPING_ELEMENT_FIELDS
+
+      def semantic_mapping?(doc)
+        doc.key?('JsonStructure') && !doc.keys.intersect?(LEGACY_MAPPING_FIELDS) &&
+          bson_items(doc['Elements']).none? { legacy_mapping_element?(_1) }
+      end
+
+      def legacy_mapping_element?(element)
+        element.keys.intersect?(LEGACY_MAPPING_ELEMENT_FIELDS) ||
+          bson_items(element['Children']).any? { legacy_mapping_element?(_1) }
+      end
+
       def mapping_declaration(document, direction)
         doc = document.fetch(:doc)
         options = {
@@ -54,7 +70,7 @@ module Mxrb
           version: doc.fetch('Version', ''),
           service_name: doc.fetch('ServiceName', document.fetch(:name)),
           allowed_roles: bson_items(doc['AllowedRoles']),
-          authentication_types: bson_items(doc['AuthenticationTypes']).map { underscore(_1) },
+          authentication_types: bson_items(doc['AuthenticationTypes']).map { rest_enum_source(_1) },
           authentication_microflow: doc.fetch('AuthenticationMicroflow', ''),
           documentation: doc.fetch('Documentation', ''),
           public_documentation: doc.fetch('PublicDocumentation', ''),
@@ -336,13 +352,20 @@ module Mxrb
         [prose, responses]
       end
 
+      # The DSL capitalizes a symbol and keeps a string as written, so a value whose
+      # symbol does not capitalize back to it stays a string.
+      def rest_enum_source(value)
+        symbol = underscore(value).to_sym
+        symbol.to_s.split('_').map!(&:capitalize).join == value.to_s ? symbol : value.to_s
+      end
+
       def semantic_dataset?(doc)
         doc.dig('Source', '$Type') == 'DataSets$OqlDataSetSource' && doc.dig('Source', 'Query').is_a?(String)
       end
 
       def dataset_declaration(document)
         doc = document.fetch(:doc)
-        lines = ["dataset #{symbol(document.fetch(:name))} do"]
+        lines = ["dataset #{[symbol(document.fetch(:name)), *dataset_options(doc)].join(', ')} do"]
         bson_items(doc['Parameters']).each do |parameter|
           type = dataset_type_source(parameter.fetch('ParameterType'))
           lines << "  parameter #{symbol(parameter.fetch('Name'))}, #{type}"
@@ -365,13 +388,37 @@ module Mxrb
           end
           lines << '  end'
         end
-        query = doc.dig('Source', 'Query').to_s
-        ieiq = doc.dig('Source', 'IEIQ') == true ? ', ieiq: true' : ''
-        lines << "  oql <<~OQL#{ieiq}"
-        query.each_line { lines << "    #{_1.chomp}" }
-        lines << '  OQL'
+        lines.concat(dataset_query_lines(doc.fetch('Source')))
         lines << 'end'
         lines.join("\n")
+      end
+
+      def dataset_options(doc)
+        options = []
+        documentation = doc['Documentation'].to_s
+        options << "documentation: #{ruby(documentation)}" unless documentation.empty?
+        options << 'excluded: true' if doc['Excluded'] == true
+        level = doc['ExportLevel'].to_s
+        options << "export_level: #{ruby(level)}" unless level.empty? || level == 'Hidden'
+        options
+      end
+
+      # A heredoc reads best, but only reproduces a query without escapes, interpolation
+      # or indentation shared by every line, so any other query is written as a literal.
+      def dataset_query_lines(source)
+        query = source.fetch('Query').to_s
+        ieiq = source['IEIQ'] == true ? ', ieiq: true' : ''
+        return ["  oql #{ruby(query)}#{ieiq}"] unless heredoc_query?(query)
+
+        chomp = query.end_with?("\n") ? '' : '.chomp'
+        ["  oql <<~OQL#{chomp}#{ieiq}", *query.each_line.map { "    #{_1.chomp}" }, '  OQL']
+      end
+
+      def heredoc_query?(query)
+        lines = query.each_line.map(&:chomp)
+        content = lines.reject { _1.strip.empty? }
+        !query.empty? && !query.match?(/\\|#[{$@]|\r/) && lines.none? { _1.strip == 'OQL' } &&
+          content.any? { !_1.match?(/\A[ \t]/) }
       end
 
       def dataset_type_source(type)

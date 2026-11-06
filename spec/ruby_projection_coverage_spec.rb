@@ -783,11 +783,11 @@ RSpec.describe 'complete Ruby projection contracts' do
     declaration = exporter.send(
       :published_rest_declaration,
       name: 'Api', id: id(1), container_id: id(2), doc: {
-        'Path' => '/api', 'Version' => '1', 'AuthenticationTypes' => bson_array(%w[Basic Custom]),
+        'Path' => '/api', 'Version' => '1', 'AuthenticationTypes' => bson_array(%w[Basic Custom SAML]),
         'Resources' => bson_array([]), 'AllowedRoles' => bson_array([])
       }
     )
-    expect(declaration).to include('authentication_types:', '"basic"', '"custom"')
+    expect(declaration).to include('authentication_types:', ':basic', ':custom', '"SAML"')
 
     ruby_exporter = Mxrb::RubyApp::Exporter.new(
       '/tmp/source.mpr', '/tmp/ruby-app', mendix_sidecar: '/tmp/mendix-sidecar'

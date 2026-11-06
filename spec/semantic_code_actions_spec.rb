@@ -90,6 +90,12 @@ RSpec.describe 'semantic code action documents' do
       return_type: { '$ID' => SecureRandom.uuid, '$Type' => 'CodeActions$VoidType' }
     )
     javascript['Platform'] = 'Web'
+    # Before Mendix 10 an action names its icon image instead of embedding it.
+    javascript['MicroflowActionInfo'] = {
+      '$ID' => SecureRandom.uuid, '$Type' => 'CodeActions$MicroflowActionInfo',
+      'Caption' => 'Notify', 'Category' => 'Tests', 'Icon' => 'Actions.Icons.Notify',
+      'ImageData' => BSON::Binary.new('image')
+    }
     mpr.insert_unit(
       container_uuid: module_id, containment_name: 'Documents', contents_doc: javascript
     )

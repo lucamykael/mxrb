@@ -163,6 +163,8 @@ module Mxrb
           'Caption' => spec.fetch(:caption, '').to_s,
           'Category' => spec.fetch(:category, '').to_s
         )
+        # Before Mendix 10 the icon is an image document named by its qualified name.
+        document['Icon'] = spec.fetch(:icon_image).to_s if spec.key?(:icon_image)
         {
           icon: 'IconData', icon_dark: 'IconDataDark',
           image: 'ImageData', image_dark: 'ImageDataDark'
