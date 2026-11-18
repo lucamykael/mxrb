@@ -69,6 +69,7 @@ registram imagens dos runners e hashes das fontes.
 A margem de 50% incide sobre a maior mediana observada de cada métrica.
 `CI / performance / benchmark` seleciona exatamente uma identidade compatível,
 verifica sete etapas e total e publica medições/diagnósticos mesmo na falha.
+O check obrigatório `test` exige que esse job termine com sucesso.
 Ambiente desconhecido, catálogo ambíguo e arquivo ausente falham; não há fallback
 local nem recalibração automática. Consulte o [guia](../guides/benchmark-budget.pt-BR.md).
 

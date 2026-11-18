@@ -15,9 +15,16 @@ jobs:
 
   test:
     name: test
+    needs: performance
+    if: always()
     runs-on: ubuntu-latest
 
     steps:
+      - name: Require a passing performance budget
+        env:
+          PERFORMANCE_RESULT: ${{ needs.performance.result }}
+        run: test "$PERFORMANCE_RESULT" = success
+
       - name: Check out repository
         uses: actions/checkout@v5
 

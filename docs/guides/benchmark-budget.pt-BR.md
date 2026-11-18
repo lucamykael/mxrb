@@ -52,6 +52,9 @@ budget antigo apenas para contornar uma recusa de compatibilidade.
 O CI executa um job separado no Ubuntu 24.04/Ruby 4.0.5, com três amostras e
 `--budget docs/benchmarks/sudoku-ci.json`, em todo PR e push para main.
 O artefato `pipeline-performance` publica medições, diagnóstico e imagem do runner.
+O check obrigatório `test` depende desse job e falha explicitamente quando o
+budget não passa, inclusive se a medição for cancelada ou pulada. Assim, a
+proteção existente de main também bloqueia regressões de desempenho.
 
 ## Calibração revisável no GitHub Actions
 
