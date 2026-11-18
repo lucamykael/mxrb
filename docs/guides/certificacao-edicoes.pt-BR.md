@@ -45,10 +45,13 @@ inclui esses assets. Os originais permanecem inalterados.
 
 `cases.json` é compatível com `script/mxbuild_oracle`. O workflow legado prepara
 as edições das famílias 7, 9 e 11 e executa seus MxBuild no Windows. Um resultado
-`equivalent` continua sendo uma comparação de falhas iguais. Todos os oito casos
+`equivalent` continua sendo uma comparação de falhas iguais. Todos os onze casos
 do workflow usam `--require-build`, que retorna falha para `equivalent`.
 Isso inclui os projetos legados 5.21.4, 6.10.8, 7.5.0, 7.17.0 e 9.6.1,
-além das três edições de apresentação. O 5.21.4 usa sua ferramenta exata no
+além das três edições de apresentação e três casos de propriedades escalares.
+O plano `property_cases.json` verifica 33 alterações públicas Ruby nas versões
+7/9/11; o [relatório de editabilidade](../planning/ruby-editability.pt-BR.md)
+separa esse escopo das operações ainda não suportadas. O 5.21.4 usa sua ferramenta exata no
 Windows; o QueryApiBlogPost restaura 16 dependências Maven declaradas,
 fixadas em `spec/fixtures/presentation_edits/query-api-dependencies.json`.
 Um pacote vazio também falha; tamanho e SHA-256 do pacote entram no relatório.
