@@ -1,0 +1,81 @@
+{
+  "date": "2026-11-18",
+  "scope": "Public Mendix 11.12.1 input-text and popup edit witness; not certification of every project or edit operation",
+  "fixture": "spec/fixtures/ruby_text_popup_edits/project.rb",
+  "scenario": "spec/fixtures/frontend_browser/ruby_text_popup_edits_flow.json",
+  "edits": {
+    "placeholder": [
+      "Original placeholder",
+      "Edited placeholder"
+    ],
+    "aria_label": [
+      "Original accessible name",
+      "Edited accessible name"
+    ],
+    "popup_width": [
+      520,
+      640
+    ],
+    "popup_height": [
+      320,
+      420
+    ],
+    "popup_resizable": [
+      true,
+      false
+    ]
+  },
+  "reconstruction": "Public Ruby edits, with the runtime MPR removed before compilation",
+  "native": {
+    "version": "11.12.1",
+    "status": "pass",
+    "checks": {
+      "source": {
+        "errors": [],
+        "warnings": [],
+        "deprecations": [],
+        "total-problems": 0
+      },
+      "built": {
+        "errors": [],
+        "warnings": [],
+        "deprecations": [],
+        "total-problems": 0
+      }
+    },
+    "packages": {
+      "source": {
+        "built": true,
+        "exit_code": 0,
+        "package_bytes": 635696,
+        "package_sha256": "a836042f954606388bceb7067004b58872c442547f892d305768326890702581",
+        "errors": [],
+        "warnings": []
+      },
+      "rebuilt": {
+        "built": true,
+        "exit_code": 0,
+        "package_bytes": 635710,
+        "package_sha256": "f7da249a7ab7a5dca16ee443baf605da9ce08b2da96660ad07e847225d60ba01",
+        "errors": [],
+        "warnings": []
+      }
+    }
+  },
+  "browser": {
+    "passed": true,
+    "pages": 3,
+    "steps": 21,
+    "console_errors": []
+  },
+  "negative_witness": {
+    "code": "CE6901",
+    "cause": "A defined LabelTemplate and a ScreenReaderLabel cannot coexist, even with empty visible text",
+    "correction": "The public fixture has LabelTemplate nil before export; the native rule is not bypassed"
+  },
+  "limits": [
+    "Only the first projected translation is editable; other languages and template parameters are preserved",
+    "Input text containers and popup fields must already exist in the native baseline",
+    "Application-specific consistency rules still require Mendix validation"
+  ]
+}

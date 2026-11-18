@@ -89,6 +89,41 @@ originalmente vazio, mantendo os botões externos. A reprovação fica registrad
 como evidência de que comparação integral não substitui compilação nativa;
 `PageEdits` não implementa todas as regras de consistência do Studio Pro.
 
+## Textos de inputs, popup e preservação da base
+
+O sincronizador também aplica `placeholder` e `aria_label` em text boxes,
+inputs numéricos e text areas, quando o contêiner nativo existe. A edição altera
+a primeira tradução, que é a representada na declaração Ruby; as outras
+traduções, o fallback, os parâmetros e suas identidades são preservados. Para
+um texto sem traduções, uma tradução é criada no idioma padrão do projeto.
+Referências como `{1}` precisam permanecer presentes no texto parametrizado.
+
+Em popups existentes, `width`, `height` e `resizable` passam a ser editáveis.
+Modo, ação de fechamento, parâmetros, variáveis, acesso e autofocus continuam
+guardados. Dimensões devem ser inteiros não negativos representáveis no campo
+nativo; a disposição final também depende do layout e do tema.
+
+A prova começa com uma reconstrução sem edições. Ela detectou dois casos de
+perda agora cobertos por regressões: documentação REST com uma seção legada
+`Responses:` e marcadores diferentes nas listas de atributos de índices do
+mesmo domínio. A extração de metadados de respostas mantém a documentação
+original; cada índice existente conserva seu marcador individual.
+
+`ruby_page_text_popup_edits_spec.rb` compara edições com documentos esperados
+independentes e verifica reexportação. O cenário
+`ruby_text_popup_edits_flow.json` confere os textos e dimensões editados, ausência
+dos controles de redimensionamento e continuidade dos fluxos de popup aninhado.
+Essas provas não substituem as regras de consistência do Mendix: por exemplo,
+um `max_length` maior que o tamanho do atributo ainda é uma combinação inválida.
+O Mendix também não permite uma legenda visual definida e um rótulo de leitor
+de tela simultaneamente no mesmo input, mesmo com a legenda vazia; a fixture
+de acessibilidade mantém `LabelTemplate: nil` na base nativa.
+
+A [evidência pública](../evidence/ruby-text-popup-edits-2026-11-18.json) registra
+zero diagnósticos nos dois modelos, dois pacotes novos gerados pelo MxBuild
+11.12.1 e os 21 passos aprovados no Chromium. Projetos privados e seus
+diagnósticos ficam fora desses artefatos públicos.
+
 ## Backlog de editabilidade
 
 | ID | Prioridade | Operação | Situação e prova necessária |
@@ -97,10 +132,10 @@ como evidência de que comparação integral não substitui compilação nativa;
 | EDIT-002 | P1 | Sincronizar propriedades escalares já exportadas | 33 campos reais aprovados na comparação integral; 15 ensaios isolados também cobrem reexportação. A certificação nativa é registrada separadamente. |
 | EDIT-003 | P1 | Alterar bindings, fontes de dados e ações de widgets | `PageEdits` ainda recusa essas mudanças; exigir edição isolada, execução da ação e comparação integral. |
 | EDIT-004 | P1 | Adicionar, mover e renomear widgets em páginas existentes | A inclusão é recusada; remoção/reordenação têm suporte limitado à estrutura que o sincronizador encontra. Exigir testes de parent, listas e campos singulares, identidades e referências. |
-| EDIT-005 | P1 | Editar parâmetros, variáveis, popup e acesso à página | Atualmente recusado na projeção da aplicação; implementar transformação nativa por versão e cenários de chamada/acesso. |
+| EDIT-005 | P1 | Editar parâmetros, variáveis, popup e acesso à página | Parcial: largura, altura e redimensionamento de popup existente são editáveis. Modo, fechamento, parâmetros, variáveis e acesso continuam pendentes. |
 | EDIT-006 | P1 | Criar/remover layouts e snippets; mudar seus parâmetros | `PresentationEdits` recusa essas operações. Exigir atualização de chamadas e referências, além do documento. |
 | EDIT-007 | P1 | Editar propriedades e eventos de widgets Marketplace | Validar por pacote e schema fixados; exibir a distinção entre declaração pública, preservação e comportamento realmente testado. |
-| EDIT-008 | P2 | Editar placeholder, acessibilidade, traduções e textos parametrizados | Ainda faltam operações completas, incluindo textos inicialmente vazios e preservação de idiomas/parâmetros. |
+| EDIT-008 | P2 | Editar placeholder, acessibilidade, traduções e textos parametrizados | Parcial: placeholder e aria_label de inputs de texto, incluindo contêiner vazio, preservam outras traduções e parâmetros. Edição explícita por idioma e alteração de parâmetros continuam pendentes. |
 | EDIT-009 | P1 | Inventário do projeto de uso real | Auditar também domínio, associações, regras, microflows/nanoflows, navegação e integrações. Esses grupos não foram certificados por esta auditoria de apresentação. |
 
 Nenhum item pendente desta tabela é contado como concluído por um round-trip

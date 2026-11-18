@@ -197,6 +197,27 @@ jobs:
           npm --prefix "${RUNNER_TEMP}/drafts/ruby/frontend" run build
           bundle exec ruby script/browser_fixture_gate --kind app --source "${RUNNER_TEMP}/drafts/ruby" \
             --scenario spec/fixtures/frontend_browser/presentation_persistence_flow.json --output tmp/browser-ci/persistence
+      - name: Certify edited input texts and popup properties
+        run: |
+          bundle exec ruby bin/mxrb generate spec/fixtures/ruby_text_popup_edits/project.rb "${RUNNER_TEMP}/text-popup/source/Contracts.mpr"
+          bundle exec ruby bin/mxrb export "${RUNNER_TEMP}/text-popup/source/Contracts.mpr" "${RUNNER_TEMP}/text-popup/ruby" --mode ruby
+          bundle exec ruby -Ilib -rmxrb <<'RUBY'
+          app = File.join(ENV.fetch('RUNNER_TEMP'), 'text-popup/ruby')
+          page = File.join(app, 'app/pages/contracts/editor_page.rb')
+          source = File.read(page)
+          { 'Original placeholder' => 'Edited placeholder', 'Original accessible name' => 'Edited accessible name',
+            'width: 520' => 'width: 640', 'height: 320' => 'height: 420', 'resizable: true' => 'resizable: false' }.each do |from, to|
+            raise "ambiguous edit: #{from}" unless source.scan(from).size == 1
+            source = source.sub(from, to)
+          end
+          File.write(page, source)
+          FileUtils.rm_rf(File.dirname(Mxrb::RubyApp::Manifest.load(app).absolute_path('runtime_mpr')))
+          Mxrb::RubyApp.compile(app, File.join(ENV.fetch('RUNNER_TEMP'), 'text-popup/built/Contracts.mpr'))
+          RUBY
+          npm --prefix "${RUNNER_TEMP}/text-popup/ruby/frontend" ci
+          npm --prefix "${RUNNER_TEMP}/text-popup/ruby/frontend" run build
+          bundle exec ruby script/browser_fixture_gate --kind app --source "${RUNNER_TEMP}/text-popup/ruby" \
+            --scenario spec/fixtures/frontend_browser/ruby_text_popup_edits_flow.json --output tmp/browser-ci/text-popup
       - uses: actions/upload-artifact@v4
         if: always()
         with:

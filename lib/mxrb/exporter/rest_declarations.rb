@@ -104,7 +104,7 @@ module Mxrb
           spec.fetch(:operations).each_with_index do |operation, index|
             native_operation = native_operations.fetch(index)
             operation = operation.dup
-            operation[:documentation], legacy_responses = split_rest_responses(operation[:documentation])
+            _prose, legacy_responses = split_rest_responses(operation[:documentation])
             responses = rest_responses_for(document, native_operation, mod:)
             responses = legacy_responses if responses.empty?
             parameters = Array(operation.delete(:parameters))

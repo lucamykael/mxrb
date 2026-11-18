@@ -4571,9 +4571,7 @@ module Mxrb
       if entity[:indexes].nil?
         doc[indexes_key] ||= IO::BsonCodec.build_array([])
       else
-        doc[indexes_key] = IO::BsonCodec.build_array(
-          entity.fetch(:indexes).map { index_doc(_1, attribute_ids:) }
-        )
+        doc[indexes_key] = entity_index_docs(entity.fetch(:indexes), previous&.dig(indexes_key), attribute_ids)
       end
       if entity[:lifecycle].nil?
         doc[events_key] ||= IO::BsonCodec.build_array([])
@@ -4785,7 +4783,16 @@ module Mxrb
       }
     end
 
-    def index_doc(index, attribute_ids:)
+    def entity_index_docs(declarations, previous, attribute_ids)
+      payload = IO::BsonCodec.parse_array(previous)
+      by_id = payload.fetch(:items).to_h { [IO::BsonCodec.extract_id(_1['$ID']), _1] }
+      indexes = declarations.map do |index|
+        index_doc(index, attribute_ids:, previous: by_id[index[:id].to_s])
+      end
+      IO::BsonCodec.build_array(indexes, marker: payload.fetch(:marker))
+    end
+
+    def index_doc(index, attribute_ids:, previous: nil)
       declarations = index[:members] || index.fetch(:attributes).zip(index.fetch(:ascending)).map do |name, ascending|
         { name:, ascending: }
       end
@@ -4804,7 +4811,9 @@ module Mxrb
       {
         '$ID' => id, '$Type' => 'DomainModels$EntityIndex',
         'GUID' => binary_uuid(guid),
-        'Attributes' => IO::BsonCodec.build_array(members, marker: 2),
+        'Attributes' => IO::BsonCodec.build_array(
+          members, marker: IO::BsonCodec.parse_array(previous&.fetch('Attributes', nil) || [2]).fetch(:marker)
+        ),
         'IncludeInOffline' => index.fetch(:include_offline, false)
       }
     end
