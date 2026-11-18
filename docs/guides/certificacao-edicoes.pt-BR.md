@@ -44,14 +44,15 @@ inclui esses assets. Os originais permanecem inalterados.
 ## Oráculo nativo e navegador
 
 `cases.json` é compatível com `script/mxbuild_oracle`. O workflow legado prepara
-as edições das famílias 7 e 9 e executa seus MxBuild no Windows. Um resultado
+as edições das famílias 7, 9 e 11 e executa seus MxBuild no Windows. Um resultado
 `equivalent` continua sendo uma comparação de falhas iguais. Os novos casos
 de apresentação usam `--require-build`, que retorna falha para `equivalent`.
 Um pacote vazio também falha; tamanho e SHA-256 do pacote entram no relatório.
 Uma aprovação estrutural local registra `native_oracle: not_run` até existir
 evidência nativa separada.
 
-No Mendix 11, execute `mx check` da versão 11.12.1 nas cópias `source` e `rebuilt`.
+No Mendix 11, o gate usa MxBuild 11.12.1 e JDK 21 para gerar ambos os pacotes.
+`mx check` nas cópias `source` e `rebuilt` também verifica o modelo localmente.
 Para a verificação visual, compile o frontend em `mendix11/ruby/frontend` com
 `npm ci && npm run build` e execute o cenário
 [`presentation_edits_sudoku_flow.json`](../../spec/fixtures/frontend_browser/presentation_edits_sudoku_flow.json)
@@ -74,8 +75,8 @@ antes de salvar, uma após recarga, mensagem `Name is required` para nome vazio
 e nenhuma gravação inválida. Relatórios e capturas ficam no diretório `--output`.
 
 A [evidência da continuação](../evidence/backlog-2026-11-18.json) separa
-comparação estrutural, check nativo e navegador. A execução Windows das novas
-edições de 7/9 permanece pendente até esse workflow rodar com as alterações.
+comparação estrutural, pacotes nativos, check e navegador, com links para os
+runs e hashes dos relatórios.
 
 ## Bibliotecas do Mendix 7
 
@@ -91,8 +92,18 @@ O manifesto deriva das versões `testRuntime` do `build.gradle` fixado e inclui
 as transitivas resolvidas. Cada download é conferido por SHA-256; um arquivo
 existente com hash diferente é recusado. As mesmas bibliotecas entram na origem
 e na reconstrução. Os 87 fontes Java passaram em `javac` 8 com essas bibliotecas
-e as APIs 7.5. A execução MxBuild Windows continua pendente.
+e as APIs 7.5. MxBuild 7.5 no Windows também gerou ambos os pacotes.
 
-Mendix 9 ainda requer assets de tema/widgets e correção explícita dos pesos de
-colunas inválidos na própria origem. O relatório Windows anterior registra
-esses bloqueios; a certificação não remove documentos para obter aprovação.
+## Recursos do Mendix 9
+
+A fixture original omite pacotes e arquivos de inicialização do Atlas.
+O manifesto `mendix9-assets.json` fixa Atlas Core 3.0.7, Atlas Web Content 3.0.6,
+AnyChart 3.0.2 e Data Widgets 2.0.1 com URLs oficiais e SHA-256. O workflow
+extrai apenas `themesource/` e `widgets/`, preservando todas as units do MPR.
+
+Os arquivos em `mendix9-theme/web/` restauram a configuração Atlas 3, a
+compilação Sass e a importação das variáveis padrão que Data Widgets usa.
+`theme/web/settings.json` habilita a interpretação flexível das colunas;
+os pesos `-1` da fixture permanecem intactos. Os widgets contemporâneos ao
+Mendix 9.6 correspondem às definições armazenadas. Não é necessário atualizar
+widgets no modelo nem remover páginas, layouts ou snippets.

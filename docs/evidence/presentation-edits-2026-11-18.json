@@ -57,7 +57,12 @@
         "modules.NavigationLayouts.presentation_documents.Sidebar_Full_Responsive.document.Class: \"layout-sidebar-responsive\" != \"layout-sidebar-responsive mxrb-certified-layout-7\"",
         "modules.UnitTesting.presentation_documents.Readme.document.Widget.Caption.Items.[1].Text: \"Readme\\r\\n==============\\r\\n\\r\\nConfiguration\\r\\n-------------------------------------\\r\\nDo not modify this module, instead\\r\\n1. Create a new custom module (e.g. UnitTests)\\r\\n2. Download the CommunityCommons module from the App Store, when you don't already have it available in your project.\\r\\n3. Call 'UnitTestOverview' microflow, which calls the java action looking for available tests and opens the overview page.\\r\\n4. You can also choose to copy the snippet UnitTestOverview to a (new) page the new custom module\\r\\nMake sure the java action 'FindAllUnitTests' is called before the new page with the snippet is opened. The java action checks the model for 'unit test' microflows/ java actions. \\r\\n5. Take a look at the examples in the 'Example Tests' folder. Use these examples as a pointer to create your own unit tests.\\r\\n6. Your custom unit tests need to be prefixed with case-insensitive 'Test_' or 'UT_' in order to be picked up automatically by this unit test module.\\r\\n\\r\\n\" != \"MXRB certified snippet 7\""
       ],
-      "native_oracle": "not_run"
+      "native_oracle": {
+        "run": "https://github.com/lucamykael/mxrb/actions/runs/44339419920",
+        "report": "docs/evidence/backlog-2026-11-18.json#presentation_native.mendix7",
+        "status": "pass",
+        "source_and_rebuilt_packages": true
+      }
     },
     {
       "label": "mendix9",
@@ -116,7 +121,12 @@
         "modules.MyFirstModule.pages.Home_Web.document.Title.Items.[1].Text: \"Homepage\" != \"MXRB certified page 9\"",
         "modules.MyFirstModule.pages.Home_Web.title: \"Homepage\" != \"MXRB certified page 9\""
       ],
-      "native_oracle": "not_run"
+      "native_oracle": {
+        "run": "https://github.com/lucamykael/mxrb/actions/runs/44339419920",
+        "report": "docs/evidence/backlog-2026-11-18.json#presentation_native.mendix9",
+        "status": "pass",
+        "source_and_rebuilt_packages": true
+      }
     },
     {
       "label": "mendix11",
@@ -190,7 +200,12 @@
         "modules.Sudoku.pages.Home.document.FormCall.Arguments.[1].Widgets.conditionalVisibilityWidget1.Widgets.sdHomeShell.Widgets.sdHero.Widgets.sdHeroTitle.Content.Template.Items.[1].Text: \"Sudoku\" != \"MXRB certified Sudoku\"",
         "modules.Sudoku.pages.Home.widgets.conditionalVisibilityWidget1.children.sdHomeShell.children.sdHero.children.sdHeroTitle.options.caption: \"Sudoku\" != \"MXRB certified Sudoku\""
       ],
-      "native_oracle": "not_run"
+      "native_oracle": {
+        "run": "https://github.com/lucamykael/mxrb/actions/runs/44339419920",
+        "report": "docs/evidence/backlog-2026-11-18.json#presentation_native.mendix11",
+        "status": "pass",
+        "source_and_rebuilt_packages": true
+      }
     }
   ]
 }
