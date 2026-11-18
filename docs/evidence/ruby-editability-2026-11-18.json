@@ -1,0 +1,458 @@
+{
+  "date": "2026-11-18",
+  "scope": "Existing scalar properties of Ruby application pages; this is not universal Ruby editability certification",
+  "before": {
+    "passed": false,
+    "cases": [
+      {
+        "label": "button-style",
+        "passed": false,
+        "error": "Mxrb::RubyApp::PageEdits::UnsupportedEdit: Sudoku.Home: widgets.Atlas_Core.Atlas_Default.regions.Main.conditionalVisibilityWidget1.children.sdHomeShell.children.sdCards.children.sdCardEasy.children.bEasy.options.button_style changed from \"primary\" to \"success\", which cannot be applied to the document yet"
+      },
+      {
+        "label": "text-render-mode",
+        "passed": false,
+        "error": "Mxrb::RubyApp::PageEdits::UnsupportedEdit: Sudoku.Home: widgets.Atlas_Core.Atlas_Default.regions.Main.conditionalVisibilityWidget1.children.sdHomeShell.children.sdHero.children.sdHeroTitle.options.render_mode changed from \"h1\" to \"h2\", which cannot be applied to the document yet"
+      }
+    ]
+  },
+  "after": {
+    "structural_passed": true,
+    "changed_native_fields": 33,
+    "cases": [
+      {
+        "label": "mendix7-properties",
+        "passed": true,
+        "version": "7.5.0",
+        "mpr": "ConnectorKitDemo.mpr",
+        "source": "mendix7-properties/source",
+        "rebuilt": "mendix7-properties/rebuilt",
+        "fixture": {
+          "name": "ConnectorKitDemo.mpr",
+          "sha256": "f6afbea72e73a6ef5f2ae97ff37c2fff10ef0f5c7270646a1cd2f509a8a9d3ec"
+        },
+        "repository": "https://github.com/ako/ConnectorKitDemo",
+        "revision": "9eed61f1fb737d189a3b018ac7691c87569053de",
+        "rebuilt_from": "mendix_sidecar",
+        "changes": [
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "Editable"
+            ],
+            "before": "Always",
+            "after": "Never"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ReadOnlyStyle"
+            ],
+            "before": "Inherit",
+            "after": "Text"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "IsPasswordBox"
+            ],
+            "before": false,
+            "after": true
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "MaxLengthCode"
+            ],
+            "before": -1,
+            "after": 32
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "TabIndex"
+            ],
+            "before": 0,
+            "after": 2
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "LabelWidth"
+            ],
+            "before": 3,
+            "after": 4
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ShowFooter"
+            ],
+            "before": true,
+            "after": false
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "Editable"
+            ],
+            "before": true,
+            "after": false
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ReadOnlyStyle"
+            ],
+            "before": "Text",
+            "after": "Control"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "TabIndex"
+            ],
+            "before": 0,
+            "after": 1
+          }
+        ],
+        "differences": [
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Editable: true != false",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.LabelWidth: 3 != 4",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.ReadOnlyStyle: \"Text\" != \"Control\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.ShowFooter: true != false",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.TabIndex: 0 != 1",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.Editable: \"Always\" != \"Never\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.IsPasswordBox: false != true",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.MaxLengthCode: -1 != 32",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.ReadOnlyStyle: \"Inherit\" != \"Text\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.TabIndex: 0 != 2",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.editable: :always != :never",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.label_width: 3 != 4",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.read_only_style: :text != :control",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.show_footer: true != false",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.tab_index: 0 != 1",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].Editable: \"Always\" != \"Never\"",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].IsPasswordBox: false != true",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].MaxLengthCode: -1 != 32",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].ReadOnlyStyle: \"Inherit\" != \"Text\"",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].TabIndex: 0 != 2"
+        ],
+        "native_oracle": "not_run"
+      },
+      {
+        "label": "mendix9-properties",
+        "passed": true,
+        "version": "9.6.1.29396",
+        "mpr": "FirstMedix App.mpr",
+        "source": "mendix9-properties/source",
+        "rebuilt": "mendix9-properties/rebuilt",
+        "fixture": {
+          "name": "FirstMedix App.mpr",
+          "sha256": "96743656641fdebbf82db46c147d666eee5180fc38f2125572594903e9df6b33"
+        },
+        "repository": "https://github.com/bhataparnak/MendixApp",
+        "revision": "8912322e170e5babb4bf77461242ae51b555ca42",
+        "rebuilt_from": "mendix_sidecar",
+        "changes": [
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "Editable"
+            ],
+            "before": "Always",
+            "after": "Never"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ReadOnlyStyle"
+            ],
+            "before": "Inherit",
+            "after": "Text"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "IsPasswordBox"
+            ],
+            "before": false,
+            "after": true
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "MaxLengthCode"
+            ],
+            "before": -1,
+            "after": 32
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "TabIndex"
+            ],
+            "before": 0,
+            "after": 2
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "LabelWidth"
+            ],
+            "before": 3,
+            "after": 4
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ShowFooter"
+            ],
+            "before": true,
+            "after": false
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "Editable"
+            ],
+            "before": true,
+            "after": false
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ReadOnlyStyle"
+            ],
+            "before": "Text",
+            "after": "Control"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "TabIndex"
+            ],
+            "before": 0,
+            "after": 1
+          }
+        ],
+        "differences": [
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Editable: true != false",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.LabelWidth: 3 != 4",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.ReadOnlyStyle: \"Text\" != \"Control\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.ShowFooter: true != false",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.TabIndex: 0 != 1",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.Editable: \"Always\" != \"Never\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.IsPasswordBox: false != true",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.MaxLengthCode: -1 != 32",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.ReadOnlyStyle: \"Inherit\" != \"Text\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.TabIndex: 0 != 2",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.editable: :always != :never",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.label_width: 3 != 4",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.read_only_style: :text != :control",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.show_footer: true != false",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.tab_index: 0 != 1"
+        ],
+        "native_oracle": "not_run"
+      },
+      {
+        "label": "mendix11-properties",
+        "passed": true,
+        "version": "11.12.1",
+        "mpr": "Sudoku.mpr",
+        "source": "mendix11-properties/source",
+        "rebuilt": "mendix11-properties/rebuilt",
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "repository": "https://github.com/ako/mxcli-sudoku",
+        "revision": "918af72e43ca8e1d61fb0c32ad13d8da94b944e2",
+        "rebuilt_from": "mendix_sidecar",
+        "changes": [
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "Editable"
+            ],
+            "before": "Always",
+            "after": "Never"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ReadOnlyStyle"
+            ],
+            "before": "Inherit",
+            "after": "Text"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "IsPasswordBox"
+            ],
+            "before": false,
+            "after": true
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "MaxLengthCode"
+            ],
+            "before": -1,
+            "after": 32
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "TabIndex"
+            ],
+            "before": 0,
+            "after": 2
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "LabelWidth"
+            ],
+            "before": 3,
+            "after": 4
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ShowFooter"
+            ],
+            "before": true,
+            "after": false
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "Editability"
+            ],
+            "before": "Always",
+            "after": "Never"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "ReadOnlyStyle"
+            ],
+            "before": "Text",
+            "after": "Control"
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "TabIndex"
+            ],
+            "before": 0,
+            "after": 1
+          },
+          {
+            "unit": "Administration.Account_New",
+            "kind": "page",
+            "field": [
+              "AriaRequired"
+            ],
+            "before": false,
+            "after": true
+          },
+          {
+            "unit": "Sudoku.Home",
+            "kind": "page",
+            "field": [
+              "ButtonStyle"
+            ],
+            "before": "Primary",
+            "after": "Success"
+          },
+          {
+            "unit": "Sudoku.Home",
+            "kind": "page",
+            "field": [
+              "RenderMode"
+            ],
+            "before": "H1",
+            "after": "H2"
+          }
+        ],
+        "differences": [
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Editability: \"Always\" != \"Never\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.LabelWidth: 3 != 4",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.ReadOnlyStyle: \"Text\" != \"Control\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.ShowFooter: true != nil",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.TabIndex: 0 != 1",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.AriaRequired: nil != true",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.Editable: \"Always\" != \"Never\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.IsPasswordBox: nil != true",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.MaxLengthCode: -1 != 32",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.ReadOnlyStyle: \"Inherit\" != \"Text\"",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.TabIndex: 0 != 2",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.aria_required: false != true",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.editable: :always != :never",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.max_length: -1 != 32",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.password: false != true",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.read_only_style: :inherit != :text",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.tab_index: 0 != 2",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.editable: :always != :never",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.label_width: 3 != 4",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.read_only_style: :text != :control",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.show_footer: true != false",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.tab_index: 0 != 1",
+          "modules.Sudoku.pages.Home.document.FormCall.Arguments.[1].Widgets.conditionalVisibilityWidget1.Widgets.sdHomeShell.Widgets.sdCards.Widgets.sdCardEasy.Widgets.bEasy.ButtonStyle: \"Primary\" != \"Success\"",
+          "modules.Sudoku.pages.Home.document.FormCall.Arguments.[1].Widgets.conditionalVisibilityWidget1.Widgets.sdHomeShell.Widgets.sdHero.Widgets.sdHeroTitle.RenderMode: \"H1\" != \"H2\"",
+          "modules.Sudoku.pages.Home.widgets.conditionalVisibilityWidget1.children.sdHomeShell.children.sdCards.children.sdCardEasy.children.bEasy.options.button_style: \"primary\" != \"success\"",
+          "modules.Sudoku.pages.Home.widgets.conditionalVisibilityWidget1.children.sdHomeShell.children.sdHero.children.sdHeroTitle.options.render_mode: \"h1\" != \"h2\""
+        ],
+        "native_oracle": "not_run"
+      }
+    ]
+  },
+  "independent_expectation": "Expected copies are modified directly at the native field paths recorded in the plan; all units are compared, not only edited values",
+  "isolated_tests": {
+    "source": "spec/ruby_page_property_edits_spec.rb",
+    "property_roundtrips": 13,
+    "reexport_checked": true
+  },
+  "remaining": [
+    "widget additions and structural changes",
+    "bindings, data sources and events",
+    "page roles and contracts",
+    "layout/snippet lifecycle and parameters",
+    "Marketplace-specific editing",
+    "localized and initially empty text properties",
+    "non-presentation document audit"
+  ]
+}

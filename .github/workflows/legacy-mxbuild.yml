@@ -36,7 +36,7 @@ concurrency:
 jobs:
   prepare:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
       - uses: ruby/setup-ruby@v1
@@ -97,15 +97,21 @@ jobs:
           f="${RUNNER_TEMP}/fixtures"
           ln -s ConnectorKitDemo "$f/connector"
           ln -s MendixApp "$f/mendix9"
+          ln -s sudoku "$f/mxcli-sudoku"
           for label in mendix7 mendix9 mendix11; do
             bundle exec ruby script/certify_presentation_edits \
               --plan spec/fixtures/presentation_edits/cases.json --fixtures "$f" \
               --label "$label" --output "${RUNNER_TEMP}/edits-$label"
           done
+          for label in mendix7-properties mendix9-properties mendix11-properties; do
+            bundle exec ruby script/certify_presentation_edits \
+              --plan spec/fixtures/presentation_edits/property_cases.json --fixtures "$f" \
+              --label "$label" --output "${RUNNER_TEMP}/edits-$label"
+          done
           ruby -rjson -rfileutils <<'RUBY'
           root = File.join(ENV.fetch('RUNNER_TEMP'), 'oracle')
           cases = JSON.parse(File.read(File.join(root, 'cases.json')))
-          %w[mendix7 mendix9 mendix11].each do |label|
+          %w[mendix7 mendix9 mendix11 mendix7-properties mendix9-properties mendix11-properties].each do |label|
             edits = File.join(ENV.fetch('RUNNER_TEMP'), "edits-#{label}")
             entry = JSON.parse(File.read(File.join(edits, 'cases.json'))).fetch(0)
             name = "presentation-#{label}"
@@ -162,6 +168,19 @@ jobs:
             mxbuild: 9.6.1.29396
             sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
             java: "11"
+          - label: presentation-mendix7-properties
+            mxbuild: 7.5.0
+            sha256: c7a5e78c58c91e05c3c4d7a05ac80d90e5e2e0287b752e049025895e3d23790d
+            java: "8"
+          - label: presentation-mendix9-properties
+            mxbuild: 9.6.1.29396
+            sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
+            java: "11"
+          - label: presentation-mendix11-properties
+            mxbuild: 11.12.1
+            archive_prefix: win-
+            sha256: 1c59f25e5933b68e90e122204c99ea4ff4cac88535b720eae882b24c48d0daa6
+            java: "21"
           - label: presentation-mendix11
             mxbuild: 11.12.1
             archive_prefix: win-
