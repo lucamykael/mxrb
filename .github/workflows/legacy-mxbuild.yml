@@ -62,6 +62,7 @@ jobs:
             "${RUNNER_TEMP}/fixtures/ConnectorKitDemo/userlib"
       - name: Restore the omitted Atlas 3 theme and widgets without changing the model
         run: |
+          cp -R spec/fixtures/presentation_edits/mendix9-theme/. "${RUNNER_TEMP}/fixtures/MendixApp/theme/"
           ruby -rjson -rdigest -rtmpdir <<'RUBY'
           target = File.join(ENV.fetch('RUNNER_TEMP'), 'fixtures/MendixApp')
           manifest = JSON.parse(File.read('spec/fixtures/presentation_edits/mendix9-assets.json'))

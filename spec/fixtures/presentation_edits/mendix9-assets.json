@@ -2,16 +2,16 @@
   "schema_version": 1,
   "artifacts": [
     {
-      "url": "https://github.com/mendix/widgets-resources/releases/download/atlas-core-v3.0.0/Atlas_Core.mpk",
-      "sha256": "0dd2598aad153189552ded3e222f2e960568a2ca8cbbf56533116bb12c73a5ce"
+      "url": "https://github.com/mendix/widgets-resources/releases/download/atlas-core-v3.0.7/Atlas_Core_3_0_7.mpk",
+      "sha256": "6bee40b557c51a9be0e6848839e6b33169230a1420a7896f8b45e70c1b69a026"
     },
     {
-      "url": "https://github.com/mendix/widgets-resources/releases/download/atlas-web-content-v3.0.0/Atlas_Web_Content.mpk",
-      "sha256": "8285f63ec9c4ed3cdd2478da1f36fb26f1bdd2126a7b51fdb7233b9fc3fa4d44"
+      "url": "https://github.com/mendix/widgets-resources/releases/download/atlas-web-content-v3.0.6/Atlas_Web_Content_3_0_6.mpk",
+      "sha256": "00b694707315d15cf6eefb1e8038f73b3e4dfdc094062a740d5a738db4ce22f0"
     },
     {
-      "url": "https://github.com/mendix/charts/releases/download/anychart-v1.3.7/AnyChart_BuildingBlocks_1_3_7.mpk",
-      "sha256": "d9a64d900b32e21630066ca680fafa3c6014aba419f883adcdfad0d8e3d568d8"
+      "url": "https://github.com/mendix/charts/releases/download/anychart-v3.0.2/AnyChart_BuildingBlocks.mpk",
+      "sha256": "ef143556d9707b0e6bd8f34c064f5ae61f82fabbb143a4c6c8c298cc910087ef"
     },
     {
       "url": "https://github.com/mendix/widgets-resources/releases/download/data-widgets-v2.0.1/DataWidgets_2_0_1.mpk",
