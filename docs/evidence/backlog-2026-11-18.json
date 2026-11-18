@@ -744,8 +744,8 @@
     "verified_commit": "22d6e08"
   },
   "ci_ruby_suite": {
-    "run": "https://github.com/lucamykael/mxrb/actions/runs/44335030614",
-    "examples": 3258,
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/44341290982",
+    "examples": 3259,
     "failures": 0,
     "coverage_required": {
       "lines": 100,
@@ -753,5 +753,12 @@
     },
     "lint_files": 947,
     "lint_offenses": 0
+  },
+  "windows_jdk_regression": {
+    "failed_run": "https://github.com/lucamykael/mxrb/actions/runs/44341290889",
+    "cause": "JDK 21 version probe timed out; automatic discovery selected JDK 17, which cannot compile release 21",
+    "fix": "Explicit JavaHome; validate both runtime and compiler major version; 120-second cold-start probes; no fallback when configured",
+    "regression_test": "script/test_studio_java.ps1",
+    "local_powershell_test": "passed"
   }
 }

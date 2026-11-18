@@ -76,7 +76,7 @@ local nem recalibração automática. Consulte o [guia](../guides/benchmark-budg
 ## Verificações
 
 A suíte completa passou localmente com 3.249 exemplos, zero falhas e 100% de
-linhas/branches. O CI passou com 3.258 exemplos, JDK 21 e as fixtures públicas
+linhas/branches. O CI passou com 3.259 exemplos, JDK 21 e as fixtures públicas
 fixadas, exigindo cobertura integral.
 A continuação acrescentou testes de scripts, seleção de budgets e build.
 A certificação Windows geral gerou 26 casos sem falhas e executou os cenários
@@ -86,3 +86,8 @@ Os gates exigem `MXRB_ACCEPTANCE_MPRS` e `MXRB_CONNECTOR_FIXTURE`, JDK 21,
 Chromium e loopback. Falhas não são substituídas por skips. Na execução remota,
 o prazo de inicialização do DevTools passou de cinco para trinta segundos,
 sem relaxar as verificações funcionais nem os erros de console.
+
+O gate Windows recebe o JDK 21 explicitamente e valida `java` e `javac`.
+Uma sondagem expirada ou uma versão incompatível falha antes dos builds;
+a seleção não recorre silenciosamente ao JDK 17 do PATH. O teste PowerShell
+reproduz timeout, runtime/compilador incorretos e erro de execução.
