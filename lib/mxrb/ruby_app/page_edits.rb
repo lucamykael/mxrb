@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 require_relative 'page_edit_properties'
+require_relative 'page_edit_texts'
+require_relative 'page_edit_contracts'
 
 module Mxrb
   module RubyApp
@@ -90,7 +92,7 @@ module Mxrb
         return if changes.empty?
 
         raw = document.raw_document
-        Document.new(name, raw).apply(changes)
+        Document.new(name, raw, language: @manifest.data.dig('languages', 'default')).apply(changes)
         @project.mpr.update_unit(document.id, raw)
       end
 
@@ -128,8 +130,7 @@ module Mxrb
           %i[allowed_module_roles data_source].each do |field|
             unsupported!(field) unless before.fetch(field) == after.fetch(field)
           end
-          unsupported!('presentation parameters, variables, popup or autofocus changed') unless
-            before.fetch(:presentation, {}) == after.fetch(:presentation, {})
+          compare_presentation(before.fetch(:presentation, {}), after.fetch(:presentation, {}))
           unsupported!('excluded changed') unless before.fetch(:excluded, false) == after.fetch(:excluded, false)
           compare_scalar_page_fields(before, after)
           compare(before.fetch(:widgets), after.fetch(:widgets), 'widgets', nil, [])
@@ -137,6 +138,12 @@ module Mxrb
         end
 
         private
+
+        def compare_presentation(before, after)
+          @changes.concat(PageEditContracts.changes(before, after))
+        rescue ArgumentError => e
+          unsupported!(e.message)
+        end
 
         def compare_scalar_page_fields(before, after)
           old_title = before.fetch(:title)
@@ -220,6 +227,9 @@ module Mxrb
           elsif widget && relative.size == 2 && relative.first == 'options' &&
                 PageEditProperties.supported?(widget.fetch(:type), relative.last)
             @changes << [:property, widget.fetch(:name), widget.fetch(:type), relative.last, before, after]
+          elsif widget && relative.size == 2 && relative.first == 'options' &&
+                PageEditTexts.supported?(widget.fetch(:type), relative.last)
+            @changes << [:text_property, widget.fetch(:name), widget.fetch(:type), relative.last, before, after]
           else
             unsupported!("#{path} changed from #{before.inspect} to #{after.inspect}, " \
                          'which cannot be applied to the document yet')
@@ -231,9 +241,10 @@ module Mxrb
 
       # Applies listed differences to the raw document of a page.
       class Document
-        def initialize(page, raw)
+        def initialize(page, raw, language: nil)
           @page = page
           @raw = raw
+          @language = language
         end
 
         def apply(changes)
@@ -252,6 +263,18 @@ module Mxrb
           PageEditProperties.apply(widget(name), type, key, before, after)
         rescue ArgumentError => e
           unsupported!("#{name}.#{key}: #{e.message}")
+        end
+
+        def text_property(name, type, key, before, after)
+          PageEditTexts.apply(widget(name), type, key, before, after, language: @language)
+        rescue ArgumentError => e
+          unsupported!("#{name}.#{key}: #{e.message}")
+        end
+
+        def popup(key, before, after)
+          PageEditContracts.apply(@raw, key, before, after)
+        rescue ArgumentError => e
+          unsupported!(e.message)
         end
 
         # Mendix before 8 keeps the class and style on the widget itself.

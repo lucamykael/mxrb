@@ -191,6 +191,8 @@ RSpec.describe Mxrb::RubyApp::PageEdits do
       expect(entry.reason).to include('applied to its Mendix document')
       editing = Mxrb::RubyApp::PortabilityReport.new(app).to_h.fetch(:ruby_page_editing)
       expect(editing.fetch(:scalar_options).fetch('button')).to include('button_style', 'render_type')
+      expect(editing.fetch(:text_options).fetch('text_box')).to contain_exactly('placeholder', 'aria_label')
+      expect(editing.fetch(:popup_options)).to contain_exactly('width', 'height', 'resizable')
       expect(editing.fetch(:unsupported)).to include('adding or renaming widgets')
       expect(editing.fetch(:certification)).to include('not certification of every Ruby edit operation')
     end

@@ -42,8 +42,10 @@ module Mxrb
         {
           scope: 'existing exported pages with a native baseline; fields must exist in the source Mendix version',
           scalar_options: PageEditProperties::CONTRACTS.transform_values { _1.last.keys },
+          text_options: PageEditTexts::TYPES.to_h { [_1, PageEditTexts::FIELDS.keys] },
+          popup_options: PageEditContracts::POPUP_FIELDS.keys,
           unsupported: ['adding or renaming widgets', 'bindings, data sources and events',
-                        'roles, parameters, variables, popup, autofocus and exclusion'],
+                        'roles, parameters, variables, popup mode/close action, autofocus and exclusion'],
           certification: 'Capability contract only; native status is not certification of every Ruby edit operation'
         }
       end
