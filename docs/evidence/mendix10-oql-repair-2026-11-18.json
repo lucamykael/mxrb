@@ -1,0 +1,43 @@
+{
+  "date": "2026-11-18",
+  "scope": "Public Mendix 10 OQL query edit; no private project content",
+  "fixture": "spec/fixtures/legacy_oql_view/project.rb",
+  "version": "10.24.18.103793",
+  "seed": "Official mx create-project --app-name Oql --language-code en_US --output-dir <source>",
+  "generation": "bundle exec ruby -Ilib spec/fixtures/legacy_oql_view/project.rb <source>/Oql.mpr",
+  "edit": {
+    "file": "app/models/app/item_view.rb",
+    "before": "SELECT Name AS Name FROM App.Item",
+    "after": "SELECT Code AS Name FROM App.Item"
+  },
+  "reconstruction": "Ruby mode export; runtime MPR directory detached before Mxrb::RubyApp.compile",
+  "checks": {
+    "source": {
+      "errors": 0,
+      "warnings": 21,
+      "deprecations": 0
+    },
+    "built": {
+      "errors": 0,
+      "warnings": 21,
+      "deprecations": 0
+    }
+  },
+  "unchanged_warnings": true,
+  "native_build": "pass",
+  "packages": {
+    "source": {
+      "built": true,
+      "exit_code": 0,
+      "package_bytes": 9977318,
+      "package_sha256": "8d1d3b51832614bcec9e2c0cd4a8e4b6ad55e5c074285a7ca624cb8547bc7ca7"
+    },
+    "rebuilt": {
+      "built": true,
+      "exit_code": 0,
+      "package_bytes": 9977594,
+      "package_sha256": "da504639a839e99c98cda49c339629f9b51f658aec63e2838b7ca33810d5e5f5"
+    }
+  },
+  "boundary": "Mendix 10 reads Source.Oql; Mendix 11 uses the named document. This witness checks native build consistency, not production data results."
+}

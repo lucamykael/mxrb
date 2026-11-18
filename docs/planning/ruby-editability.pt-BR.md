@@ -138,6 +138,9 @@ referência é declarada. A fixture pública está em
 `spec/fixtures/legacy_oql_view/project.rb`; para checagem nativa, aplique-a a
 um projeto Blank criado pelo `mx create-project` do Mendix 10.24, que fornece
 as configurações e recursos completos dessa versão.
+O [ensaio nativo](../evidence/mendix10-oql-repair-2026-11-18.json) gerou pacotes
+novos antes e depois da edição da consulta pelo Ruby, com zero erros e os
+mesmos 21 avisos da fixture Blank.
 
 ## Backlog de editabilidade
 
