@@ -2,9 +2,7 @@ name: Legacy MxBuild oracle
 
 # Builds public projects of Mendix versions older than 10 with the official MxBuild of
 # their own version, as stored and as rebuilt through project.rb (see script/mxbuild_oracle).
-# On 2026-11-06, 6.10.8 built both ways; 7.5.0 and 7.17.0 passed the model check both ways
-# and stopped at javac on jars the repositories do not commit; 9.6.1 reported the same
-# theme and layout errors both ways.
+# Every fixture must generate a fresh package in both variants, including exact Mendix 5.21.4.
 
 on:
   pull_request:
@@ -61,6 +59,11 @@ jobs:
           bundle exec ruby script/prepare_oracle_dependencies \
             spec/fixtures/presentation_edits/connector-dependencies.json \
             "${RUNNER_TEMP}/fixtures/ConnectorKitDemo/userlib"
+      - name: Restore the declared Query API Java dependencies with pinned checksums
+        run: |
+          bundle exec ruby script/prepare_oracle_dependencies \
+            spec/fixtures/presentation_edits/query-api-dependencies.json \
+            "${RUNNER_TEMP}/fixtures/QueryApiBlogPost/userlib"
       - name: Restore the omitted Atlas 3 theme and widgets without changing the model
         run: |
           cp -R spec/fixtures/presentation_edits/mendix9-theme/. "${RUNNER_TEMP}/fixtures/MendixApp/theme/"
@@ -84,6 +87,7 @@ jobs:
         run: |
           f="${RUNNER_TEMP}/fixtures"
           bundle exec ruby script/mxbuild_oracle_inputs "${RUNNER_TEMP}/oracle" \
+            "tree-view-5.21.4=$f/TreeViewAndGridView/test_5_21_4/TreeviewDemo.mpr" \
             "connector-kit-7.5.0=$f/ConnectorKitDemo/ConnectorKitDemo.mpr" \
             "query-api-7.17.0=$f/QueryApiBlogPost/QueryApiBlogPost.mpr" \
             "first-medix-9.6.1=$f/MendixApp/FirstMedix App.mpr" \
@@ -130,6 +134,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
+          - label: tree-view-5.21.4
+            mxbuild: 5.21.4
+            sha256: 4ac7bc6c48fa4d47283aa895a337368c58476352e7922b99c63a4ff21f3e8b4c
+            java: "8"
           - label: grid-view-6.10.8
             mxbuild: 6.10.8
             sha256: 87b1b1f16c6c079482f7341e9fada7a1653af361fed004bea05df6daa8e89a25
@@ -147,17 +155,14 @@ jobs:
             sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
             java: "11"
           - label: presentation-mendix7
-            require_build: --require-build
             mxbuild: 7.5.0
             sha256: c7a5e78c58c91e05c3c4d7a05ac80d90e5e2e0287b752e049025895e3d23790d
             java: "8"
           - label: presentation-mendix9
-            require_build: --require-build
             mxbuild: 9.6.1.29396
             sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
             java: "11"
           - label: presentation-mendix11
-            require_build: --require-build
             mxbuild: 11.12.1
             archive_prefix: win-
             sha256: 1c59f25e5933b68e90e122204c99ea4ff4cac88535b720eae882b24c48d0daa6
@@ -212,7 +217,7 @@ jobs:
           --mxbuild "$env:MXBUILD"
           --java-home "${{ steps.java.outputs.path }}"
           --label ${{ matrix.label }}
-          ${{ matrix.require_build }}
+          --require-build
       - uses: actions/upload-artifact@v4
         if: always()
         with:

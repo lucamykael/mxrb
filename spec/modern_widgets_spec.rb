@@ -919,6 +919,11 @@ RSpec.describe 'modern page widgets' do
     )
     expect(source).not_to include('native_widget', 'deep_structure:', 'bson_binary(')
 
+    exported_page = Mxrb::Dsl::PageBuilder.new(:Images)
+    exported_page.instance_eval(source)
+    expect(exported_page.to_h.fetch(:widgets).first.dig(:options, :source))
+      .to eq(parsed.first.dig(:options, :source))
+
     rebuilt = parsed.map { writer.send(:widget_doc, _1) }
     expect(rebuilt.map { _1.fetch('$Type') }).to eq(raw.map { _1.fetch('$Type') })
     expect(rebuilt[0].dig('DataSource', 'EntityRef', 'Entity')).to eq('Ui.Picture')

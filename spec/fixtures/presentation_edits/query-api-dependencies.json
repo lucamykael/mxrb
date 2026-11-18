@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "source": "https://github.com/ako/QueryApiBlogPost/blob/f042c01fab6ab22181329db3043928859af35217/.classpath",
+  "scope": "Exact Maven userlib versions declared by the pinned project classpath and build.gradle; legacy oracle only",
+  "artifacts": [
+    {
+      "file": "aopalliance-1.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/aopalliance/aopalliance/1.0/aopalliance-1.0.jar",
+      "sha256": "0addec670fedcd3f113c5c8091d783280d23f75e3acb841b61a9cdb079376a08"
+    },
+    {
+      "file": "apache-mime4j-core-0.7.2.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/james/apache-mime4j-core/0.7.2/apache-mime4j-core-0.7.2.jar",
+      "sha256": "4d7434c68f94b81a253c12f28e6bbb4d6239c361d6086a46e22e594bb43ac660"
+    },
+    {
+      "file": "axiom-api-1.2.19.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/ws/commons/axiom/axiom-api/1.2.19/axiom-api-1.2.19.jar",
+      "sha256": "48edd57906904a47e52e997e69ff40a417ce1649573ee9c5646b67f10321e7b2"
+    },
+    {
+      "file": "commons-codec-1.4.jar",
+      "url": "https://repo.maven.apache.org/maven2/commons-codec/commons-codec/1.4/commons-codec-1.4.jar",
+      "sha256": "6aa4234c74f3a1035751a25822545867c8c3727125a642b6e049665d1863631b"
+    },
+    {
+      "file": "commons-lang-2.5.jar",
+      "url": "https://repo.maven.apache.org/maven2/commons-lang/commons-lang/2.5/commons-lang-2.5.jar",
+      "sha256": "a64e0c73988fef8d5b73fc29d105a3a6e2dc5d9b90a94fca065cd2439dc56590"
+    },
+    {
+      "file": "commons-logging-1.2.jar",
+      "url": "https://repo.maven.apache.org/maven2/commons-logging/commons-logging/1.2/commons-logging-1.2.jar",
+      "sha256": "daddea1ea0be0f56978ab3006b8ac92834afeefbd9b7e4e6316fca57df0fa636"
+    },
+    {
+      "file": "geronimo-activation_1.1_spec-1.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/geronimo/specs/geronimo-activation_1.1_spec/1.1/geronimo-activation_1.1_spec-1.1.jar",
+      "sha256": "3910d9f8b331b2ae573e16591ac246058e088cac97f3ec064f46b10a8801fcb9"
+    },
+    {
+      "file": "geronimo-stax-api_1.0_spec-1.0.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/geronimo/specs/geronimo-stax-api_1.0_spec/1.0.1/geronimo-stax-api_1.0_spec-1.0.1.jar",
+      "sha256": "124235815fba376b0c20ed37f79d691fa26b4e00297a4ab27b6ca05ceb591348"
+    },
+    {
+      "file": "guice-2.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/com/google/inject/guice/2.0/guice-2.0.jar",
+      "sha256": "9fb545199584a41e8064e1232ca3f3c757366b27fc7aa488ac0fc98263642756"
+    },
+    {
+      "file": "httpclient-4.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpclient/4.1/httpclient-4.1.jar",
+      "sha256": "e554d8bdeeceba93d746729fb6d09102668459b57b10a0858185718201eee289"
+    },
+    {
+      "file": "httpcore-4.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/apache/httpcomponents/httpcore/4.1/httpcore-4.1.jar",
+      "sha256": "3ce38de51f4e24668c6d184057a8d08541f9e815d2d319d0f462f083092b29cf"
+    },
+    {
+      "file": "jaxen-1.1.6.jar",
+      "url": "https://repo.maven.apache.org/maven2/jaxen/jaxen/1.1.6/jaxen-1.1.6.jar",
+      "sha256": "5ac9c74bbb3964b34a886ba6b1b6c0b0dc3ebeebc1dc4a44942a76634490b3eb"
+    },
+    {
+      "file": "nekohtml-1.9.10.jar",
+      "url": "https://repo.maven.apache.org/maven2/net/sourceforge/nekohtml/nekohtml/1.9.10/nekohtml-1.9.10.jar",
+      "sha256": "f44f6f6b355dfb083cdbd5b33c9d7920fef0c77281095df30a2b18ba5eb60d69"
+    },
+    {
+      "file": "openid4java-1.0.0.jar",
+      "url": "https://repo.maven.apache.org/maven2/org/openid4java/openid4java/1.0.0/openid4java-1.0.0.jar",
+      "sha256": "477702693a55ac4070a38171e7d52f1bb86de97b040eaff59f7ee3edf42edb2a"
+    },
+    {
+      "file": "xercesImpl-2.8.1.jar",
+      "url": "https://repo.maven.apache.org/maven2/xerces/xercesImpl/2.8.1/xercesImpl-2.8.1.jar",
+      "sha256": "f95f3ad141bdff5a64962f6c26b4f18ecf0975cd3a68802712284b9e6db37e1b"
+    },
+    {
+      "file": "xml-apis-1.3.03.jar",
+      "url": "https://repo.maven.apache.org/maven2/xml-apis/xml-apis/1.3.03/xml-apis-1.3.03.jar",
+      "sha256": "ec225a1c66d4505fecd1ad7644ce4477e626f439fd9230dbf8338cebdfc3a0e5"
+    }
+  ]
+}

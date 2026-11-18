@@ -521,7 +521,7 @@ module Mxrb
                  when :file_manager
                    %i[allowed_extensions editable max_file_size show_file_in_browser mode tab_index]
                  when :image_viewer
-                   %i[entity alternative_text default_image force_full_objects width height width_unit
+                   %i[entity source alternative_text default_image force_full_objects width height width_unit
                       height_unit responsive show_as_thumbnail on_click_enlarge tab_index]
                  when :image_uploader
                    %i[allowed_extensions caption editable max_file_size thumbnail_width
