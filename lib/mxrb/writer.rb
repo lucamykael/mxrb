@@ -902,9 +902,8 @@ module Mxrb
         raise ValidationError, "OQL view #{module_name}.#{entity_name} requires source or query"
       end
 
-      # Studio Pro 11 converts legacy inline OQL into a named source reference,
-      # but does not create the referenced document. Normalize inline queries
-      # before writing so the converted project keeps a resolvable source.
+      # Keep a resolvable document for Studio Pro 11, while Mendix 10 still
+      # reads the query directly from the entity's source.
       source = "#{module_name}.#{entity_name}" if source.empty? && !query.nil?
       declared_id = declaration[:source_id].to_s
 
@@ -921,12 +920,17 @@ module Mxrb
         '$ID' => declared_id.empty? ? (previous_id || SecureRandom.uuid) : declared_id,
         '$Type' => 'DomainModels$OqlViewEntitySource', source_key => source
       )
-      %w[oql Oql OQL].each { normalized.delete(_1) }
+      synchronize_oql_source_query!(normalized, query)
       entity[key] = normalized
       %w[oqlQuery OqlQuery OQLQuery].each { entity.delete(_1) }
 
-      # Inline queries are normalized to a named source above; the matching
-      # ViewEntitySourceDocument is synchronized separately.
+      # The matching ViewEntitySourceDocument is synchronized separately.
+    end
+
+    def synchronize_oql_source_query!(source, query)
+      query = source['Oql'] if query.nil?
+      %w[oql Oql OQL].each { source.delete(_1) }
+      source['Oql'] = query if @definition[:version].to_s.to_i == 10 && !query.nil?
     end
 
     def synchronize_ruby_oql_member_values!(entity)
@@ -4608,12 +4612,12 @@ module Mxrb
         '$Type' => 'DomainModels$OqlViewEntitySource',
         'SourceDocument' => source_reference
       )
-      %w[oql Oql OQL].each { source.delete(_1) }
+      synchronize_oql_source_query!(source, query)
       doc[source_key] = source
       %w[oqlQuery OqlQuery OQLQuery].each { doc.delete(_1) }
 
-      # Inline queries are represented by the named source document created
-      # alongside the entity, so there is no legacy inline-query write here.
+      # Mendix 10 needs the inline query as well as the retained document;
+      # Mendix 11 resolves the named source document created alongside it.
     end
 
     def attribute_doc(attr, previous, oql_view: false)
