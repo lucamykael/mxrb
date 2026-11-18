@@ -210,7 +210,7 @@ created by that lifecycle. Management uses a private authenticated loopback
 endpoint; state and token are stored in permission-restricted local files.
 
 The editor UI is implemented in React + TypeScript and talks only to the Ruby
-server APIs. Its Vite bundle is compiled into `lib/mxrb/web_ui`, included in the
+server APIs. Its esbuild bundle is compiled into `lib/mxrb/web_ui`, included in the
 gem, and served locally. Node.js is therefore not required to use the installed
 editor, and no CDN is contacted. To develop the UI, run `npm install`,
 `npm run typecheck`, and `npm run build` from `frontend/modeler`.

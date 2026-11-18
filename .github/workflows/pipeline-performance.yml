@@ -1,0 +1,56 @@
+name: Pipeline performance
+
+on:
+  workflow_call:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Measure for review or enforce the committed CI budget
+        type: choice
+        options: [verify, calibrate]
+        default: verify
+
+permissions:
+  contents: read
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0.5"
+          bundler-cache: true
+      - name: Check out pinned fixture
+        run: |
+          git clone --quiet https://github.com/ako/mxcli-sudoku.git "${RUNNER_TEMP}/sudoku"
+          git -C "${RUNNER_TEMP}/sudoku" checkout --quiet 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
+      - name: Record runner image
+        run: |
+          ruby -rjson -e 'puts JSON.pretty_generate(ENV.to_h.slice("ImageOS", "ImageVersion", "RUNNER_OS", "RUNNER_ARCH", "GITHUB_SHA", "GITHUB_RUN_ID"))' > "${RUNNER_TEMP}/runner.json"
+      - name: Collect three independent measurements and a candidate budget
+        if: inputs.mode == 'calibrate'
+        env:
+          MXRB_BENCHMARK_MPR: ${{ runner.temp }}/sudoku/Sudoku/Sudoku.mpr
+        run: |
+          for sample in 1 2 3; do
+            bundle exec ruby script/benchmark --runs 3 > "${RUNNER_TEMP}/benchmark-${sample}.json"
+          done
+          bundle exec ruby script/calibrate_benchmark "${RUNNER_TEMP}"/benchmark-*.json > "${RUNNER_TEMP}/candidate-budget.json"
+      - name: Enforce reviewed runner budget
+        if: inputs.mode != 'calibrate'
+        env:
+          MXRB_BENCHMARK_MPR: ${{ runner.temp }}/sudoku/Sudoku/Sudoku.mpr
+        run: |
+          bundle exec ruby script/benchmark --runs 3 --budget docs/benchmarks/sudoku-ci.json > "${RUNNER_TEMP}/benchmark.json" 2> "${RUNNER_TEMP}/benchmark-error.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-performance
+          path: |
+            ${{ runner.temp }}/benchmark*.json
+            ${{ runner.temp }}/candidate-budget.json
+            ${{ runner.temp }}/runner.json
+          retention-days: 30

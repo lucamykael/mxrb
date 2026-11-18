@@ -4,76 +4,125 @@
 require 'benchmark'
 require 'fileutils'
 require 'json'
+require 'optparse'
 require 'tmpdir'
 $LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
 require_relative '../lib/mxrb'
 require_relative '../lib/mxrb/benchmark_fixture'
+require_relative 'benchmark_support'
 
-fixture_value = ENV.fetch('MXRB_BENCHMARK_MPR', '').strip
-abort 'MXRB_BENCHMARK_MPR must point to an external benchmark MPR' if fixture_value.empty?
+# Repeatable native pipeline measurements with opt-in compatible budgets.
+module PipelineBenchmark
+  # One complete pipeline; each sample starts with an isolated empty semantic cache.
+  class Sample
+    def initialize(fixture)
+      @fixture = fixture
+      @measurements = {}
+    end
 
-fixture = File.expand_path(fixture_value)
-raise "#{fixture}: benchmark fixture not found" unless File.file?(fixture)
+    def run
+      validation = measure('validate') { Mxrb.validate(@fixture) }
+      raise Mxrb::ValidationError, validation.errors.join("\n") unless validation.valid?
 
-measurements = {}
-measure = lambda do |name, &block|
-  result = nil
-  elapsed = Benchmark.realtime { result = block.call }
-  measurements[name] = elapsed.round(4)
-  result
-end
+      cache = measure_cache
+      measure('semantic_index_readonly') { index(@fixture) }
+      round_trip
+      { measurements_seconds: @measurements, total_seconds: @measurements.values.sum,
+        semantic_cache: cache }
+    end
 
-measure.call(:validate) { Mxrb.validate(fixture) }
-cache_metrics = {}
-Dir.mktmpdir('mxrb-cache-benchmark-') do |directory|
-  cached_fixture = Mxrb::BenchmarkFixture.copy(fixture, directory)
-  Mxrb.open(cached_fixture, readonly: false, &:clear_semantic_cache!)
+    private
 
-  measure.call(:semantic_index_cold) do
-    Mxrb.open(cached_fixture, readonly: false) do |project|
-      project.semantic_index.artifacts.size + project.semantic_index.references.size
+    def measure(name)
+      result = nil
+      elapsed = ::Benchmark.realtime { result = yield }
+      @measurements[name] = elapsed
+      result
+    end
+
+    def index(path, readonly: true)
+      Mxrb.open(path, readonly:) { _1.semantic_index.artifacts.size + _1.semantic_index.references.size }
+    end
+
+    def measure_cache # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      Dir.mktmpdir('mxrb-cache-benchmark-') do |directory|
+        cached = Mxrb::BenchmarkFixture.copy(@fixture, directory)
+        Mxrb.open(cached, readonly: false, &:clear_semantic_cache!)
+        measure('semantic_index_cold') { index(cached, readonly: false) }
+        measure('semantic_index_warm') { index(cached, readonly: false) }
+        metrics = Mxrb.open(cached, &:semantic_cache_info)
+        cold, warm = @measurements.values_at('semantic_index_cold', 'semantic_index_warm')
+        Mxrb.open(cached, readonly: false, &:clear_semantic_cache!)
+        metrics.merge(speedup: warm.zero? ? nil : (cold / warm).round(2),
+                      cleared: !Mxrb.open(cached, &:semantic_cache_info).fetch(:present))
+      end
+    end
+
+    def round_trip
+      Dir.mktmpdir('mxrb-benchmark-') do |directory|
+        exported = File.join(directory, 'ruby')
+        rebuilt = File.join(directory, File.basename(@fixture))
+        measure('export') { Mxrb::Exporter.new(@fixture, exported).export! }
+        measure('generate') { generate(exported, rebuilt) }
+        result = measure('compare') { Mxrb.compare(@fixture, rebuilt) }
+        raise Mxrb::ValidationError, result.differences.first unless result.identical?
+      end
+    end
+
+    def generate(exported, rebuilt)
+      previous = ENV['MXRB_OUTPUT_PATH']
+      ENV['MXRB_OUTPUT_PATH'] = rebuilt
+      load File.join(exported, 'project.rb')
+    ensure
+      ENV['MXRB_OUTPUT_PATH'] = previous
     end
   end
-  measure.call(:semantic_index_warm) do
-    Mxrb.open(cached_fixture, readonly: false) do |project|
-      project.semantic_index.artifacts.size + project.semantic_index.references.size
-    end
+
+  module_function
+
+  def run(fixture, runs:, budget: nil)
+    raise ArgumentError, 'runs must be between 1 and 100' unless runs.is_a?(Integer) && (1..100).cover?(runs)
+
+    identity = compatibility(fixture, runs)
+    limits = load_budget(budget, identity)
+    samples = Array.new(runs) { Sample.new(fixture).run }
+    verify_original(fixture, identity)
+
+    report = { schema_version: 1, fixture:, ruby: RUBY_DESCRIPTION, compatibility: identity,
+               samples:, **summarize(samples) }
+    report[:budget] = limits.check(report) if limits
+    report
   end
-  cache_metrics = Mxrb.open(cached_fixture, &:semantic_cache_info)
-  cold = measurements.fetch(:semantic_index_cold)
-  warm = measurements.fetch(:semantic_index_warm)
-  cache_metrics = cache_metrics.merge(
-    speedup: warm.zero? ? nil : (cold / warm).round(2)
-  )
-  Mxrb.open(cached_fixture, readonly: false, &:clear_semantic_cache!)
-  cache_metrics[:cleared] = !Mxrb.open(cached_fixture, &:semantic_cache_info).fetch(:present)
+
+  def load_budget(path, identity)
+    Budget.new(JSON.parse(File.read(path)), identity) if path
+  end
+
+  def verify_original(fixture, identity)
+    unchanged = fixture_identity(fixture) == identity.fetch('fixture') &&
+                asset_identity(fixture) == identity.fetch('assets_sha256')
+    raise 'benchmark modified the original fixture' unless unchanged
+  end
+
+  def cli(argv) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    options = { runs: 3 }
+    OptionParser.new do |parser|
+      parser.banner = 'Usage: MXRB_BENCHMARK_MPR=FILE script/benchmark [--runs N] [--budget FILE]'
+      parser.on('--runs N', Integer) { options[:runs] = _1 }
+      parser.on('--budget FILE') { options[:budget] = _1 }
+    end.parse!(argv)
+    raise ArgumentError, 'unexpected positional arguments' unless argv.empty?
+
+    fixture = ENV.fetch('MXRB_BENCHMARK_MPR', '').strip
+    raise ArgumentError, 'MXRB_BENCHMARK_MPR must point to an external benchmark MPR' if fixture.empty?
+
+    report = run(File.expand_path(fixture), **options)
+    puts JSON.pretty_generate(report)
+    report.dig(:budget, :passed) == false ? 1 : 0
+  rescue ArgumentError, KeyError, JSON::ParserError, Errno::ENOENT, OptionParser::ParseError => e
+    warn JSON.generate(error: e.message)
+    2
+  end
 end
 
-measure.call(:semantic_index_readonly) do
-  Mxrb.open(fixture) do |project|
-    project.semantic_index.artifacts.size + project.semantic_index.references.size
-  end
-end
-
-Dir.mktmpdir('mxrb-benchmark-') do |directory|
-  exported = File.join(directory, 'ruby')
-  rebuilt = File.join(directory, File.basename(fixture))
-  measure.call(:export) { Mxrb::Exporter.new(fixture, exported).export! }
-  measure.call(:generate) do
-    ENV['MXRB_OUTPUT_PATH'] = rebuilt
-    load File.join(exported, 'project.rb')
-  ensure
-    ENV.delete('MXRB_OUTPUT_PATH')
-  end
-  result = measure.call(:compare) { Mxrb.compare(fixture, rebuilt) }
-  raise result.differences.first unless result.identical?
-end
-
-payload = {
-  fixture:,
-  ruby: RUBY_DESCRIPTION,
-  semantic_cache: cache_metrics,
-  measurements_seconds: measurements,
-  total_seconds: measurements.values.sum.round(4)
-}
-puts JSON.pretty_generate(payload)
+exit PipelineBenchmark.cli(ARGV) if $PROGRAM_NAME == __FILE__

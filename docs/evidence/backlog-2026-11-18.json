@@ -1,0 +1,764 @@
+{
+  "date": "2026-11-18",
+  "structural": {
+    "passed": true,
+    "cases": [
+      {
+        "label": "mendix7",
+        "version": "7.5.0",
+        "passed": true,
+        "fixture": {
+          "name": "ConnectorKitDemo.mpr",
+          "sha256": "f6afbea72e73a6ef5f2ae97ff37c2fff10ef0f5c7270646a1cd2f509a8a9d3ec"
+        },
+        "revision": "9eed61f1fb737d189a3b018ac7691c87569053de",
+        "changed_fields": 3,
+        "edit_source": "public Ruby"
+      },
+      {
+        "label": "mendix9",
+        "version": "9.6.1.29396",
+        "passed": true,
+        "fixture": {
+          "name": "FirstMedix App.mpr",
+          "sha256": "96743656641fdebbf82db46c147d666eee5180fc38f2125572594903e9df6b33"
+        },
+        "revision": "8912322e170e5babb4bf77461242ae51b555ca42",
+        "changed_fields": 3,
+        "edit_source": "public Ruby"
+      },
+      {
+        "label": "mendix11",
+        "version": "11.12.1",
+        "passed": true,
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "revision": "918af72e43ca8e1d61fb0c32ad13d8da94b944e2",
+        "changed_fields": 4,
+        "edit_source": "public Ruby"
+      }
+    ],
+    "report": "docs/evidence/presentation-edits-2026-11-18.json"
+  },
+  "browser": [
+    {
+      "scenario": "real-sudoku-presentation-edits",
+      "passed": true,
+      "steps": 43,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/sudoku-gate/report.json",
+      "pages": [
+        {
+          "name": "edited-sudoku-home",
+          "snapshot_sha256": "a2b696fbe8e5d0b1a5bb232679a620e236d332b95066c10f32fab377fc399a77",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/sudoku-gate/edited-sudoku-home.png",
+          "screenshot_sha256": "440567d4637f73a5f475bfdb4a56d0b10317796e173ce550bd470e01ceac30d6"
+        },
+        {
+          "name": "edited-sudoku-gameplay",
+          "snapshot_sha256": "a2b696fbe8e5d0b1a5bb232679a620e236d332b95066c10f32fab377fc399a77",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/sudoku-gate/edited-sudoku-gameplay.png",
+          "screenshot_sha256": "440567d4637f73a5f475bfdb4a56d0b10317796e173ce550bd470e01ceac30d6"
+        }
+      ]
+    },
+    {
+      "scenario": "persistent-page-drafts-reload",
+      "passed": true,
+      "steps": 26,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/persistence-gate/report.json",
+      "pages": [
+        {
+          "name": "saved-after-reload",
+          "snapshot_sha256": "fd07a189ef6f695b35b32a6a0e5b7caeebecce657940f2b42629dcd33638224e",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/persistence-gate/saved-after-reload.png",
+          "screenshot_sha256": "47981d344c3209cc19900bd28d56c38ace946e51d65f2cd96fb4c13999efccfc"
+        },
+        {
+          "name": "required-name-feedback",
+          "snapshot_sha256": "496bc924a9add2fa93c649de23fcf256205e9d8735451ad355efef3d7f85b0e5",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/persistence-gate/required-name-feedback.png",
+          "screenshot_sha256": "d60d3faddfa178bbfa2c715e3969adf30fd4c39df66107343de63a1b376e41c7"
+        },
+        {
+          "name": "no-invalid-row-after-reload",
+          "snapshot_sha256": "fd07a189ef6f695b35b32a6a0e5b7caeebecce657940f2b42629dcd33638224e",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/persistence-gate/no-invalid-row-after-reload.png",
+          "screenshot_sha256": "47981d344c3209cc19900bd28d56c38ace946e51d65f2cd96fb4c13999efccfc"
+        }
+      ]
+    },
+    {
+      "scenario": "mxrb-uml-diagrams",
+      "passed": true,
+      "steps": 16,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/uml/report.json",
+      "pages": [
+        {
+          "name": "uml-diagrams",
+          "snapshot_sha256": "308d7ffaf81eff93996b798bed7043103eb7615ed2ce368ae3887e93382c3c65",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/uml/uml-diagrams.png",
+          "screenshot_sha256": "beccf37de0a8299e236546e78bc3ea6c79d378c5887f499af10eb9311a7b8755"
+        }
+      ]
+    },
+    {
+      "scenario": "mxrb-project-modeler-catalog",
+      "passed": true,
+      "steps": 17,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/catalog/report.json",
+      "pages": [
+        {
+          "name": "project-catalog",
+          "snapshot_sha256": "8c0b77740c70490064a6bbe50ba9f6a3d623865b5eea00f3368b9a2920053006",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/catalog/project-catalog.png",
+          "screenshot_sha256": "8d434e8574e8548e7c9ca68babec8155c2e9e2bb82fa78c2cb1da64aea9e3f55"
+        }
+      ]
+    }
+  ],
+  "ruby_suite": {
+    "examples": 3249,
+    "failures": 0,
+    "lines": {
+      "covered": 52371,
+      "total": 52371
+    },
+    "branches": {
+      "covered": 23079,
+      "total": 23079
+    },
+    "jdk": 21,
+    "seed": 13453
+  },
+  "additional_gate_tests": {
+    "examples": 39,
+    "failures": 0
+  },
+  "modeler": {
+    "studio_tests": 28,
+    "build_passed": true,
+    "bundler": "esbuild 0.28.2",
+    "build_reproducibility_test": true,
+    "full_audit_vulnerabilities": 0,
+    "audit_run": "https://github.com/lucamykael/mxrb/actions/runs/44339419636",
+    "development_proxy_verified": true
+  },
+  "native_11": {
+    "tool": "mx check 11.12.1",
+    "source_errors": 0,
+    "rebuilt_errors": 0,
+    "source_log_sha256": "87b1e2e6506a7c6b01f99d055b3ae76f5bd150c5775e42f6da49479fef1c0fe2",
+    "rebuilt_log_sha256": "87b1e2e6506a7c6b01f99d055b3ae76f5bd150c5775e42f6da49479fef1c0fe2",
+    "full_package_build": {
+      "pass": 1,
+      "equivalent": 0,
+      "fail": 0,
+      "mxbuild": "/home/mykael/.local/share/mendix/11.12.1/modeler/mxbuild",
+      "cases": [
+        {
+          "label": "mendix11",
+          "version": "11.12.1",
+          "status": "pass",
+          "new_errors": [],
+          "new_warnings": [],
+          "source": {
+            "exit_code": 0,
+            "log": "/tmp/mxrb-backlog-certification/mendix11/mxbuild-source.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 11941088,
+            "package_sha256": "89e2cac9dd43429bf2292c6ea7eb4d20bd85fd8447d19108bfcbcb8a586d4a1b"
+          },
+          "rebuilt": {
+            "exit_code": 0,
+            "log": "/tmp/mxrb-backlog-certification/mendix11/mxbuild-rebuilt.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 11941194,
+            "package_sha256": "771aeb7492cf845537de44b9a87ec7566637ff3270c36bfde114123661773779"
+          }
+        }
+      ]
+    }
+  },
+  "legacy_java": {
+    "version": "7.5.0",
+    "jdk": 8,
+    "source_files": 87,
+    "compile_exit_code": 0,
+    "dependencies_verified": 20,
+    "manifest": "spec/fixtures/presentation_edits/connector-dependencies.json",
+    "manifest_sha256": "53fed90cdbfed785160e675f9c222512afbaa5a05cbe6994420377d0611a189d",
+    "log_sha256": "dece862a32d4e989fd23df958ea691a7e58fa3157857498e3049c7e8b6c37239",
+    "native_build_certified": true,
+    "native_build_run": "https://github.com/lucamykael/mxrb/actions/runs/44336874344"
+  },
+  "external_pending": {},
+  "documentation_tests": {
+    "examples": 6,
+    "failures": 0
+  },
+  "lint": {
+    "files": 947,
+    "offenses": 0
+  },
+  "esbuild_browser": [
+    {
+      "interface": "domain",
+      "passed": true,
+      "scenario": "mxrb-domain-diagram",
+      "report": "tmp/backlog-2026-11-18/esbuild-domain/report.json",
+      "report_sha256": "f090edadc514fa89f980f7f6a4dc7b0892562e8377f0ae02136f8324fcd2ade6",
+      "console_errors": []
+    },
+    {
+      "interface": "studio",
+      "passed": true,
+      "scenario": "studio-project-revision-refresh",
+      "report": "tmp/backlog-2026-11-18/esbuild-studio-debug/report.json",
+      "report_sha256": "e3d87091613c677565b65ddd580803c8fe838e049562cee1333773650dba6fa4",
+      "console_errors": []
+    },
+    {
+      "interface": "uml",
+      "passed": true,
+      "scenario": "mxrb-uml-diagrams",
+      "report": "tmp/backlog-2026-11-18/esbuild-uml/report.json",
+      "report_sha256": "5e9f6d20e344f7427464ec7a9dd1f317e935e91e17f0370463ad38d790ad0bd7",
+      "console_errors": []
+    },
+    {
+      "interface": "catalog",
+      "passed": true,
+      "scenario": "mxrb-project-modeler-catalog",
+      "report": "tmp/backlog-2026-11-18/esbuild-catalog/report.json",
+      "report_sha256": "ff19c6573834aeb9dde75860d3f59bc6ff6e023f04d3747168655aa32f8ec4b4",
+      "console_errors": []
+    }
+  ],
+  "windows_native": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/44335030477",
+    "cases": 26,
+    "failed_cases": 0,
+    "runtime_scenarios": 20,
+    "runtime_passed": true,
+    "detailed_report": "docs/evidence/windows-backlog-2026-11-18.json"
+  },
+  "ci_performance": {
+    "budget": "docs/benchmarks/sudoku-ci.json",
+    "calibration": "docs/evidence/benchmark-ci-2026-11-18.json",
+    "machine_classes": 5,
+    "calibration_samples": 54,
+    "strict_verify_run": "https://github.com/lucamykael/mxrb/actions/runs/44338518720",
+    "strict_verify": {
+      "schema_version": 1,
+      "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+      "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+      "compatibility": {
+        "protocol": "mxrb-pipeline-v1",
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "environment": {
+          "ruby_engine": "ruby",
+          "ruby_version": "4.0.5",
+          "platform": "x86_64-linux",
+          "cpu": "AMD EPYC 7763 64-Core Processor",
+          "processors": 4
+        },
+        "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+        "runs": 3
+      },
+      "samples": [
+        {
+          "measurements_seconds": {
+            "validate": 1.299332966999998,
+            "semantic_index_cold": 1.2873122500000136,
+            "semantic_index_warm": 0.016398703999982445,
+            "semantic_index_readonly": 1.392190816999971,
+            "export": 6.939222618999963,
+            "generate": 29.359845715999995,
+            "compare": 5.557950158999972
+          },
+          "total_seconds": 45.852253231999896,
+          "semantic_cache": {
+            "present": true,
+            "entries": 1,
+            "bytes": 424619,
+            "fingerprints": [
+              "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+            ],
+            "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+            "hit": true,
+            "speedup": 78.5,
+            "cleared": true
+          }
+        },
+        {
+          "measurements_seconds": {
+            "validate": 1.2727301200000056,
+            "semantic_index_cold": 1.3005939209999724,
+            "semantic_index_warm": 0.015153934000011304,
+            "semantic_index_readonly": 1.2373499760000186,
+            "export": 6.718215266000016,
+            "generate": 30.300735884000005,
+            "compare": 5.575335939000013
+          },
+          "total_seconds": 46.42011504000004,
+          "semantic_cache": {
+            "present": true,
+            "entries": 1,
+            "bytes": 424619,
+            "fingerprints": [
+              "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+            ],
+            "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+            "hit": true,
+            "speedup": 85.83,
+            "cleared": true
+          }
+        },
+        {
+          "measurements_seconds": {
+            "validate": 1.2505297110000129,
+            "semantic_index_cold": 1.233327513000006,
+            "semantic_index_warm": 0.02306512299998076,
+            "semantic_index_readonly": 1.3840062859999875,
+            "export": 6.818730248999998,
+            "generate": 30.586157652999987,
+            "compare": 5.519455796999978
+          },
+          "total_seconds": 46.81527233199995,
+          "semantic_cache": {
+            "present": true,
+            "entries": 1,
+            "bytes": 424619,
+            "fingerprints": [
+              "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+            ],
+            "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+            "hit": true,
+            "speedup": 53.47,
+            "cleared": true
+          }
+        }
+      ],
+      "measurements_seconds": {
+        "validate": 1.27273,
+        "semantic_index_cold": 1.287312,
+        "semantic_index_warm": 0.016399,
+        "semantic_index_readonly": 1.384006,
+        "export": 6.81873,
+        "generate": 30.300736,
+        "compare": 5.55795
+      },
+      "total_seconds": 46.420115,
+      "budget": {
+        "passed": true,
+        "exceeded": []
+      }
+    },
+    "enforced_in_main_ci": true,
+    "deliberate_regression_test": {
+      "purpose": "Integration test with an intentionally restrictive temporary budget; never used as a performance baseline",
+      "exit_code": 1,
+      "report": {
+        "schema_version": 1,
+        "fixture": "/home/mykael/Projects/mxrb/local-projects/matrix/mxcli-sudoku/Sudoku/Sudoku.mpr",
+        "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+        "compatibility": {
+          "protocol": "mxrb-pipeline-v1",
+          "fixture": {
+            "name": "Sudoku.mpr",
+            "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+          },
+          "environment": {
+            "ruby_engine": "ruby",
+            "ruby_version": "4.0.5",
+            "platform": "x86_64-linux",
+            "cpu": "AMD Ryzen 5 8500G w/ Radeon 740M Graphics",
+            "processors": 12
+          },
+          "assets_sha256": "2c9a63f4d9b8b8109a0005905e0af7d4b3fea02fbd864b9bb5abe4bff0f6e04e",
+          "runs": 3
+        },
+        "samples": [
+          {
+            "measurements_seconds": {
+              "validate": 0.6573254600007203,
+              "semantic_index_cold": 0.7020623789994715,
+              "semantic_index_warm": 0.00832315199841105,
+              "semantic_index_readonly": 0.7212271410007816,
+              "export": 3.6111399910005275,
+              "generate": 15.235030611000184,
+              "compare": 3.069411055999808
+            },
+            "total_seconds": 24.004519789999904,
+            "semantic_cache": {
+              "present": true,
+              "entries": 1,
+              "bytes": 424619,
+              "fingerprints": [
+                "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+              ],
+              "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+              "hit": true,
+              "speedup": 84.35,
+              "cleared": true
+            }
+          },
+          {
+            "measurements_seconds": {
+              "validate": 0.6559954320000543,
+              "semantic_index_cold": 0.7031760299996677,
+              "semantic_index_warm": 0.009395655999469454,
+              "semantic_index_readonly": 0.7698790089998511,
+              "export": 3.5182777059999353,
+              "generate": 15.672795806000067,
+              "compare": 3.04328261900082
+            },
+            "total_seconds": 24.372802257999865,
+            "semantic_cache": {
+              "present": true,
+              "entries": 1,
+              "bytes": 424619,
+              "fingerprints": [
+                "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+              ],
+              "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+              "hit": true,
+              "speedup": 74.84,
+              "cleared": true
+            }
+          },
+          {
+            "measurements_seconds": {
+              "validate": 0.6439907469994068,
+              "semantic_index_cold": 0.715060579999772,
+              "semantic_index_warm": 0.009000498001114465,
+              "semantic_index_readonly": 0.6956699029997253,
+              "export": 3.404108828999597,
+              "generate": 15.39577712800019,
+              "compare": 3.056188820000898
+            },
+            "total_seconds": 23.919796505000704,
+            "semantic_cache": {
+              "present": true,
+              "entries": 1,
+              "bytes": 424619,
+              "fingerprints": [
+                "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+              ],
+              "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+              "hit": true,
+              "speedup": 79.45,
+              "cleared": true
+            }
+          }
+        ],
+        "measurements_seconds": {
+          "validate": 0.655995,
+          "semantic_index_cold": 0.703176,
+          "semantic_index_warm": 0.009,
+          "semantic_index_readonly": 0.721227,
+          "export": 3.518278,
+          "generate": 15.395777,
+          "compare": 3.056189
+        },
+        "total_seconds": 24.00452,
+        "budget": {
+          "passed": false,
+          "exceeded": [
+            {
+              "metric": "validate",
+              "actual": 0.655995,
+              "limit": 1e-06
+            },
+            {
+              "metric": "semantic_index_cold",
+              "actual": 0.703176,
+              "limit": 1e-06
+            },
+            {
+              "metric": "semantic_index_warm",
+              "actual": 0.009,
+              "limit": 1e-06
+            },
+            {
+              "metric": "semantic_index_readonly",
+              "actual": 0.721227,
+              "limit": 1e-06
+            },
+            {
+              "metric": "export",
+              "actual": 3.518278,
+              "limit": 1e-06
+            },
+            {
+              "metric": "generate",
+              "actual": 15.395777,
+              "limit": 1e-06
+            },
+            {
+              "metric": "compare",
+              "actual": 3.056189,
+              "limit": 1e-06
+            },
+            {
+              "metric": "total",
+              "actual": 24.00452,
+              "limit": 1e-06
+            }
+          ]
+        }
+      }
+    }
+  },
+  "ci_browser": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/44339419563",
+    "reports": [
+      {
+        "scenario": "mxrb-domain-diagram",
+        "passed": true,
+        "console_errors": [],
+        "report_sha256": "952ee32bc1a8eecb7b2438f6ad776890fadb4d56ded3154c83ddcc7ae3096ddf",
+        "pages": [
+          {
+            "name": "domain",
+            "steps": 0,
+            "snapshot_sha256": "75c150a47f28833312da988e8e236ef0cc11b2f9d2d9656b296ff6481a10f928",
+            "screenshot_sha256": "d280e63403719502dc60c1558dd6386f003629fb2e056c7dc2fc9b7cce793b34"
+          }
+        ]
+      },
+      {
+        "scenario": "mxrb-project-modeler-catalog",
+        "passed": true,
+        "console_errors": [],
+        "report_sha256": "41f7664d609d94060f7de600574b2fa170931bc583091861f833e1edd0df1e24",
+        "pages": [
+          {
+            "name": "project-catalog",
+            "steps": 0,
+            "snapshot_sha256": "33b90829fa1218683068fbbef450c953bad154882681e980080c7f1d87fceca4",
+            "screenshot_sha256": "0c8a5c5272e7a608633f44550fed920374de3345a2efcc1c7c1b224ef6b7009d"
+          }
+        ]
+      },
+      {
+        "scenario": "persistent-page-drafts-reload",
+        "passed": true,
+        "console_errors": [],
+        "report_sha256": "52bb13a591fa0912d51f3f322af834a967c3bbcf8b644b7dde1ab4787f96dd5c",
+        "pages": [
+          {
+            "name": "saved-after-reload",
+            "steps": 0,
+            "snapshot_sha256": "11e90a836b810c7f8a4533f218828db2e87c6947b5b4cc5c46f2adf9f254c73c",
+            "screenshot_sha256": "8ee5c4612b9e4b84f7b0a2745482dc5d3651eac383c6441d787a38d1baee1276"
+          },
+          {
+            "name": "required-name-feedback",
+            "steps": 0,
+            "snapshot_sha256": "012150c8de95c7ce25e6df96f99230e430e6852565b8b6371130c4fda0249152",
+            "screenshot_sha256": "77f90529ad77ea4ea64fdf8dd788abe0026bd168ac2a1ec22661213a302cb335"
+          },
+          {
+            "name": "no-invalid-row-after-reload",
+            "steps": 0,
+            "snapshot_sha256": "11e90a836b810c7f8a4533f218828db2e87c6947b5b4cc5c46f2adf9f254c73c",
+            "screenshot_sha256": "8ee5c4612b9e4b84f7b0a2745482dc5d3651eac383c6441d787a38d1baee1276"
+          }
+        ]
+      },
+      {
+        "scenario": "real-sudoku-presentation-edits",
+        "passed": true,
+        "console_errors": [],
+        "report_sha256": "bb732ba01a4c509697eaee426cf925d1a5d97c13069e0be75e81722f9bdde977",
+        "pages": [
+          {
+            "name": "edited-sudoku-home",
+            "steps": 0,
+            "snapshot_sha256": "a2b696fbe8e5d0b1a5bb232679a620e236d332b95066c10f32fab377fc399a77",
+            "screenshot_sha256": "388c2da3b80a108493715b81fda1fec1966c3d54ddaf64f6669ebb928fd20bc2"
+          },
+          {
+            "name": "edited-sudoku-gameplay",
+            "steps": 0,
+            "snapshot_sha256": "a2b696fbe8e5d0b1a5bb232679a620e236d332b95066c10f32fab377fc399a77",
+            "screenshot_sha256": "388c2da3b80a108493715b81fda1fec1966c3d54ddaf64f6669ebb928fd20bc2"
+          }
+        ]
+      },
+      {
+        "scenario": "mxrb-uml-diagrams",
+        "passed": true,
+        "console_errors": [],
+        "report_sha256": "12d005e155b9b46a745ab77f839e3a9cf2f38c04404195002b6b9c126e68385e",
+        "pages": [
+          {
+            "name": "uml-diagrams",
+            "steps": 0,
+            "snapshot_sha256": "c5d52e8001f6fde270ea242d109d67381e10f33a57d68ee92a816d10a8e498db",
+            "screenshot_sha256": "44f36bb6ecbec8203f7376bc9e28247d1ff64e084bbebc95e86980715a4d6714"
+          }
+        ]
+      }
+    ]
+  },
+  "presentation_native": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/44339419920",
+    "mendix9": {
+      "pass": 1,
+      "equivalent": 0,
+      "fail": 0,
+      "mxbuild": "D:\\a\\_temp\\mxbuild\\modeler\\mxbuild.exe",
+      "cases": [
+        {
+          "label": "presentation-mendix9",
+          "version": "9.6.1.29396",
+          "status": "pass",
+          "new_errors": [],
+          "new_warnings": [],
+          "source": {
+            "exit_code": 0,
+            "log": "D:/a/_temp/oracle/presentation-mendix9/mxbuild-source.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "* Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 11589708,
+            "package_sha256": "367ccffe579ca71cff5e45eca79530879b332f8c32daa8b836a30d5eab528ae4"
+          },
+          "rebuilt": {
+            "exit_code": 0,
+            "log": "D:/a/_temp/oracle/presentation-mendix9/mxbuild-rebuilt.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "* Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 11590254,
+            "package_sha256": "55fef370a0e7b7405a64e4044538d3152dec2b10634476c577ea3fe5f721376a"
+          }
+        }
+      ]
+    },
+    "mendix7": {
+      "pass": 1,
+      "equivalent": 0,
+      "fail": 0,
+      "mxbuild": "D:\\a\\_temp\\mxbuild\\modeler\\mxbuild.exe",
+      "cases": [
+        {
+          "label": "presentation-mendix7",
+          "version": "7.5.0",
+          "status": "pass",
+          "new_errors": [],
+          "new_warnings": [],
+          "source": {
+            "exit_code": 0,
+            "log": "D:/a/_temp/oracle/presentation-mendix7/mxbuild-source.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "* Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 12695836,
+            "package_sha256": "0c3290bd6ead5cab72041134c3b26c8fe81fac9d58686619da7bc767c54450b4"
+          },
+          "rebuilt": {
+            "exit_code": 0,
+            "log": "D:/a/_temp/oracle/presentation-mendix7/mxbuild-rebuilt.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "* Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 12695531,
+            "package_sha256": "88f43ca03e620fe0a0bafbeecde25f3cceb71814e7963171b176af8c5ade6f04"
+          }
+        }
+      ]
+    },
+    "mendix11": {
+      "pass": 1,
+      "equivalent": 0,
+      "fail": 0,
+      "mxbuild": "D:\\a\\_temp\\mxbuild\\modeler\\mxbuild.exe",
+      "cases": [
+        {
+          "label": "presentation-mendix11",
+          "version": "11.12.1",
+          "status": "pass",
+          "new_errors": [],
+          "new_warnings": [],
+          "source": {
+            "exit_code": 0,
+            "log": "D:/a/_temp/oracle/presentation-mendix11/mxbuild-source.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 11942595,
+            "package_sha256": "24f0f5a95cec75f5960b5e356a37f1375709c1dc1f33b40c4e2d2b3d2eb3e45f"
+          },
+          "rebuilt": {
+            "exit_code": 0,
+            "log": "D:/a/_temp/oracle/presentation-mendix11/mxbuild-rebuilt.log",
+            "errors": [],
+            "warnings": [],
+            "diagnostics": [
+              "Checking for errors..."
+            ],
+            "built": true,
+            "package_bytes": 11942629,
+            "package_sha256": "b3c7a8273441428d75f1b7cce743024761c55b5d5c95c07c1ec431512d2be57a"
+          }
+        }
+      ]
+    },
+    "verified_commit": "22d6e08"
+  },
+  "ci_ruby_suite": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/44341290982",
+    "examples": 3259,
+    "failures": 0,
+    "coverage_required": {
+      "lines": 100,
+      "branches": 100
+    },
+    "lint_files": 947,
+    "lint_offenses": 0
+  },
+  "windows_jdk_regression": {
+    "failed_run": "https://github.com/lucamykael/mxrb/actions/runs/44341290889",
+    "cause": "JDK 21 version probe timed out; automatic discovery selected JDK 17, which cannot compile release 21",
+    "fix": "Explicit JavaHome; validate both runtime and compiler major version; 120-second cold-start probes; no fallback when configured",
+    "regression_test": "script/test_studio_java.ps1",
+    "local_powershell_test": "passed"
+  }
+}

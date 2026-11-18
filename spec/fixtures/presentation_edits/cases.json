@@ -1,0 +1,176 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "label": "mendix7",
+      "mpr": "connector/ConnectorKitDemo.mpr",
+      "repository": "https://github.com/ako/ConnectorKitDemo",
+      "revision": "9eed61f1fb737d189a3b018ac7691c87569053de",
+      "fixture": {
+        "name": "ConnectorKitDemo.mpr",
+        "sha256": "f6afbea72e73a6ef5f2ae97ff37c2fff10ef0f5c7270646a1cd2f509a8a9d3ec"
+      },
+      "edits": [
+        {
+          "file": "app/pages/connector_kit_demo_tests/homepage_page.rb",
+          "from": "title: \"Homepage\"",
+          "to": "title: \"MXRB certified page 7\"",
+          "unit": "ConnectorKitDemoTests.Homepage",
+          "kind": "page",
+          "field": [
+            "Title",
+            "Items",
+            1,
+            "Text"
+          ],
+          "value": "MXRB certified page 7"
+        },
+        {
+          "file": "app/presentation/navigation_layouts.rb",
+          "from": "class_name: \"layout-sidebar-responsive\"",
+          "to": "class_name: \"layout-sidebar-responsive mxrb-certified-layout-7\"",
+          "unit": "NavigationLayouts.Sidebar_Full_Responsive",
+          "kind": "layout",
+          "field": [
+            "Class"
+          ],
+          "value": "layout-sidebar-responsive mxrb-certified-layout-7"
+        },
+        {
+          "file": "app/presentation/unit_testing.rb",
+          "from": "caption: \"Readme\\r\\n\" +\n    \"==============\\r\\n\" +\n    \"\\r\\n\" +\n    \"Configuration\\r\\n\" +\n    \"-------------------------------------\\r\\n\" +\n    \"Do not modify this module, instead\\r\\n\" +\n    \"1. Create a new custom module (e.g. UnitTests)\\r\\n\" +\n    \"2. Download the CommunityCommons module from the App Store, when you don't already have it available in your project.\\r\\n\" +\n    \"3. Call 'UnitTestOverview' microflow, which calls the java action looking for available tests and opens the overview page.\\r\\n\" +\n    \"4. You can also choose to copy the snippet UnitTestOverview to a (new) page the new custom module\\r\\n\" +\n    \"Make sure the java action 'FindAllUnitTests' is called before the new page with the snippet is opened. The java action checks the model for 'unit test' microflows/ java actions. \\r\\n\" +\n    \"5. Take a look at the examples in the 'Example Tests' folder. Use these examples as a pointer to create your own unit tests.\\r\\n\" +\n    \"6. Your custom unit tests need to be prefixed with case-insensitive 'Test_' or 'UT_' in order to be picked up automatically by this unit test module.\\r\\n\" +\n    \"\\r\\n\"",
+          "to": "caption: \"MXRB certified snippet 7\"",
+          "unit": "UnitTesting.Readme",
+          "kind": "snippet",
+          "field": [
+            "Widget",
+            "Caption",
+            "Items",
+            1,
+            "Text"
+          ],
+          "value": "MXRB certified snippet 7"
+        }
+      ]
+    },
+    {
+      "label": "mendix9",
+      "mpr": "mendix9/FirstMedix App.mpr",
+      "repository": "https://github.com/bhataparnak/MendixApp",
+      "revision": "8912322e170e5babb4bf77461242ae51b555ca42",
+      "fixture": {
+        "name": "FirstMedix App.mpr",
+        "sha256": "96743656641fdebbf82db46c147d666eee5180fc38f2125572594903e9df6b33"
+      },
+      "edits": [
+        {
+          "file": "app/pages/my_first_module/home_web_page.rb",
+          "from": "title: \"Homepage\"",
+          "to": "title: \"MXRB certified page 9\"",
+          "unit": "MyFirstModule.Home_Web",
+          "kind": "page",
+          "field": [
+            "Title",
+            "Items",
+            1,
+            "Text"
+          ],
+          "value": "MXRB certified page 9"
+        },
+        {
+          "file": "app/presentation/atlas_core.rb",
+          "from": "class_name: \"layout-atlas layout-atlas-responsive-default\"",
+          "to": "class_name: \"layout-atlas layout-atlas-responsive-default mxrb-certified-layout-9\"",
+          "unit": "Atlas_Core.Atlas_Default",
+          "kind": "layout",
+          "field": [
+            "Appearance",
+            "Class"
+          ],
+          "value": "layout-atlas layout-atlas-responsive-default mxrb-certified-layout-9"
+        },
+        {
+          "file": "app/presentation/data_widgets.rb",
+          "from": "text \"text1\", caption: \"{1}\", parameters: [\"$currentObject/StringAttribute\"]",
+          "to": "text \"text1\", caption: \"MXRB certified snippet 9 {1}\", parameters: [\"$currentObject/StringAttribute\"]",
+          "unit": "DataWidgets._WidgetsExporterSnippet",
+          "kind": "snippet",
+          "widget": "text1",
+          "field": [
+            "Content",
+            "Template",
+            "Items",
+            1,
+            "Text"
+          ],
+          "value": "MXRB certified snippet 9 {1}"
+        }
+      ]
+    },
+    {
+      "label": "mendix11",
+      "mpr": "sudoku/Sudoku/Sudoku.mpr",
+      "repository": "https://github.com/ako/mxcli-sudoku",
+      "revision": "918af72e43ca8e1d61fb0c32ad13d8da94b944e2",
+      "fixture": {
+        "name": "Sudoku.mpr",
+        "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+      },
+      "edits": [
+        {
+          "file": "app/pages/sudoku/home_page.rb",
+          "from": "caption: \"Sudoku\"",
+          "to": "caption: \"MXRB certified Sudoku\"",
+          "unit": "Sudoku.Home",
+          "kind": "page",
+          "widget": "sdHeroTitle",
+          "field": [
+            "Content",
+            "Template",
+            "Items",
+            1,
+            "Text"
+          ],
+          "value": "MXRB certified Sudoku"
+        },
+        {
+          "file": "app/presentation/atlas_core.rb",
+          "from": "class_name: \"layout-atlas layout-atlas-responsive-default\"",
+          "to": "class_name: \"layout-atlas layout-atlas-responsive-default mxrb-certified-layout-11\"",
+          "unit": "Atlas_Core.Atlas_Default",
+          "kind": "layout",
+          "field": [
+            "Appearance",
+            "Class"
+          ],
+          "value": "layout-atlas layout-atlas-responsive-default mxrb-certified-layout-11"
+        },
+        {
+          "file": "app/presentation/administration.rb",
+          "from": "caption: \"This module contains administration functionalities to manage local accounts and to see app statistics like runtime information, sessions and scheduled events.\"",
+          "to": "caption: \"MXRB certified snippet 11\"",
+          "unit": "Administration.ReadMe",
+          "kind": "snippet",
+          "widget": "text1",
+          "value": "MXRB certified snippet 11",
+          "fields": [
+            [
+              "Content",
+              "Template",
+              "Items",
+              1,
+              "Text"
+            ],
+            [
+              "Content",
+              "Template",
+              "Items",
+              2,
+              "Text"
+            ]
+          ]
+        }
+      ]
+    }
+  ]
+}

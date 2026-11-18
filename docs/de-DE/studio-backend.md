@@ -294,7 +294,7 @@ Der zusätzliche Einstiegspunkt `frontend/modeler/studio.html` stellt die Panels
 Ruby App Explorer, MXRB Tasks, globales ER, Datenbank und Parität in React bereit.
 Gebaut wird er mit `npm run build:studio` in `frontend/modeler`; der kompilierte
 Einstiegspunkt und die lokalen Ressourcen werden mit dem Gem ausgeliefert. Node ist
-nur eine Build-Abhängigkeit, und die getrennte Vite-Konfiguration lässt die übrigen
+nur eine Build-Abhängigkeit, und die getrennte esbuild-Kompilierung lässt die übrigen
 Modeler-Bundles unverändert.
 
 Die Panels sprechen das obige Protokoll über `chrome.webview.postMessage` und das

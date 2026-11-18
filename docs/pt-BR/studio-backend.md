@@ -306,7 +306,7 @@ A entrada adicional `frontend/modeler/studio.html` fornece, em React, os painéi
 Ruby App Explorer, MXRB Tasks, ER global, Banco de dados e Paridade. Compile com
 `npm run build:studio` em `frontend/modeler`; a entrada compilada e os recursos
 locais são distribuídos na gem. Node é dependência somente de build, e essa
-configuração Vite separada preserva os outros bundles do modeler.
+compilação esbuild separada preserva os outros bundles do modeler.
 
 Os painéis falam o protocolo acima por `chrome.webview.postMessage` e pelo evento
 `message`. O host desktop mantém o processo Ruby, negocia o protocolo 2 e mapeia

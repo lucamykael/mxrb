@@ -1,0 +1,16 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend/modeler
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 5
+    groups:
+      modeler-build:
+        patterns:
+          - esbuild
+          - typescript
+          - "@types/*"
+        update-types:
+          - patch
+          - minor

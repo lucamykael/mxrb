@@ -126,7 +126,7 @@ module Mxrb
             regions = %w[Top Bottom Left Right CenterRegion].to_h do |key|
               region = widget[key] || (widget['Center'] if key == 'CenterRegion')
               children = []
-              parse_widgets(parse_array(region&.[]('Widgets')), children)
+              parse_widgets(widget_collection(region || {}), children)
               [key == 'CenterRegion' ? 'center' : key.downcase, children]
             end
             target << { type: :scroll_container, name: widget['Name'],
@@ -136,7 +136,7 @@ module Mxrb
           if %w[Forms$NavigationList Pages$NavigationList].include?(type)
             children = parse_array(widget['Items']).map do |item|
               content = []
-              parse_widgets(parse_array(item['Widgets']), content)
+              parse_widgets(widget_collection(item), content)
               action = parse_action(item['Action'])
               { type: :container, name: item['Name'].to_s, options: appearance_options(item),
                 children: content, events: action ? [action.merge(event: :on_click)] : [] }
@@ -157,7 +157,7 @@ module Mxrb
           end
           if %w[Pages$Container Forms$Container Forms$DivContainer].include?(type)
             children = []
-            parse_widgets(parse_array(widget['Widgets']), children)
+            parse_widgets(widget_collection(widget), children)
             target << { type: :container, name: widget['Name'] || 'container',
                         options: container_options(widget), children: children,
                         events: container_events(widget) }
@@ -498,8 +498,8 @@ module Mxrb
       def data_view_widget(widget)
         body = []
         footer = []
-        parse_widgets(parse_array(widget['Widgets']), body)
-        parse_widgets(parse_array(widget['FooterWidgets']), footer)
+        parse_widgets(widget_collection(widget), body)
+        parse_widgets(widget_collection(widget, 'FooterWidgets', 'FooterWidget'), footer)
         appearance = appearance_options(widget)
         appearance.delete(:visible)
         options = appearance.merge(
@@ -621,7 +621,7 @@ module Mxrb
       end
 
       def parse_context_data_view_source(source)
-        reference = source['EntityRef'] || {}
+        reference = source['EntityRef'] || legacy_entity_reference(source['EntityPath'])
         steps = parse_array(reference['Steps']).map do |step|
           {
             association: step['Association'].to_s,
@@ -644,6 +644,16 @@ module Mxrb
             entity_ref_native: unknown_native_fields(reference, %w[$ID $Type Steps])
           }
         end
+      end
+
+      def legacy_entity_reference(path)
+        parts = path.to_s.split('/')
+        return { 'Entity' => parts.first } if parts.size <= 1
+
+        { 'Steps' => parts.each_slice(2).map do |association, entity|
+          { 'Association' => association,
+            'DestinationEntity' => entity }
+        end }
       end
 
       # The source of a list widget that is not an XPath query: a microflow,
@@ -1219,7 +1229,7 @@ module Mxrb
       def tab_control_widget(widget)
         tabs = parse_array(widget['TabPages']).map do |tab|
           widgets = []
-          parse_widgets(parse_array(tab['Widgets']), widgets)
+          parse_widgets(widget_collection(tab), widgets)
           {
             name: tab['Name'],
             caption: extract_text(tab['Caption']),
@@ -1247,7 +1257,7 @@ module Mxrb
           end
           cells = sorted_cells.map do |cell|
             widgets = []
-            parse_widgets(parse_array(cell['Widgets']), widgets)
+            parse_widgets(widget_collection(cell), widgets)
             {
               column: cell.fetch('LeftColumnIndex', 0).to_i,
               colspan: [cell.fetch('Width', 1).to_i, 1].max,
@@ -1271,7 +1281,7 @@ module Mxrb
         rows = parse_array(widget['Rows']).map do |row|
           columns = parse_array(row['Columns']).map do |column|
             children = []
-            parse_widgets(parse_array(column['Widgets']), children)
+            parse_widgets(widget_collection(column), children)
             {
               options: appearance_options(column).merge(
                 desktop: layout_grid_weight(column.fetch('Weight', -1)),
@@ -1311,8 +1321,18 @@ module Mxrb
           widget.dig('DataSource', 'EntityRef', 'Entity')
       end
 
+      # Before Mendix 8, containment slots hold one Widget, often a flow
+      # whose Widgets list carries the siblings. Keep plural slots authoritative.
+      def widget_collection(document, plural = 'Widgets', singular = 'Widget')
+        collection = document[plural] || document[plural.downcase]
+        return parse_array(collection) if collection
+
+        child = document[singular]
+        child.is_a?(Hash) ? [child] : []
+      end
+
       def widget_roots(doc)
-        roots = parse_array(doc['Widgets'] || doc['widgets'])
+        roots = widget_collection(doc)
         roots.concat(form_call_widgets(doc['FormCall']))
         roots
       end
@@ -1346,10 +1366,10 @@ module Mxrb
       end
 
       def child_widgets(widget)
-        direct = parse_array(widget['Widgets']) + parse_array(widget['FooterWidgets'])
-        tab_widgets = parse_array(widget['TabPages']).flat_map { parse_array(_1['Widgets']) }
+        direct = widget_collection(widget) + widget_collection(widget, 'FooterWidgets', 'FooterWidget')
+        tab_widgets = parse_array(widget['TabPages']).flat_map { widget_collection(_1) }
         row_columns = parse_array(widget['Rows']).flat_map { parse_array(_1['Columns']) }
-        column_widgets = row_columns.flat_map { parse_array(_1['Widgets']) }
+        column_widgets = row_columns.flat_map { widget_collection(_1) }
         direct + tab_widgets + column_widgets
       end
 

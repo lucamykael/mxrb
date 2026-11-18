@@ -5,6 +5,7 @@ on:
     paths:
       - '.github/workflows/studio-pro.yml'
       - 'script/studio_pro_*'
+      - 'script/test_studio_java.ps1'
       - 'spec/fixtures/native_presentation_widgets/**'
       - 'spec/fixtures/native_validation_rules/**'
       - 'spec/fixtures/native_compatibility/**'
@@ -93,6 +94,9 @@ jobs:
         with:
           distribution: temurin
           java-version: "21"
+      - name: Verify native JDK selection rejects fallback and wrong compiler versions
+        shell: powershell
+        run: ./script/test_studio_java.ps1
       - name: Download pinned official Windows MxBuild
         shell: pwsh
         run: |
@@ -112,6 +116,7 @@ jobs:
           -BatchDirectory "$env:RUNNER_TEMP/native-batch"
           -WorkspaceRoot "$env:RUNNER_TEMP/native-workspaces"
           -ToolRoot "$env:RUNNER_TEMP/mxbuild"
+          -JavaHome "$env:JAVA_HOME" -JavaMajorVersion 21
           -BuildToolsOnly
           -PinnedMxBuildSha256 b56513ff1926dbc7997d4d318dd71d2df6350fb1f78c2cb0c00b4f9d789e2c91
       - name: Boot native Runtime and exercise browser CRUD for both projects

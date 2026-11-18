@@ -1,0 +1,3 @@
+// The upstream fixture commits an empty file. Expose the pinned Atlas 3 defaults
+// to module styles such as Data Widgets, which import this app-level entrypoint.
+@import "../../themesource/atlas_core/web/variables";

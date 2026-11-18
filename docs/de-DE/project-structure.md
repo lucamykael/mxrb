@@ -200,7 +200,7 @@ privaten authentifizierten Loopback-Endpunkt; Zustand und Token liegen in lokal
 zugriffsbeschränkten Dateien.
 
 Die Editor-Oberfläche ist in React + TypeScript implementiert und verwendet nur
-die APIs des Ruby-Servers. Das Vite-Bundle wird nach `lib/mxrb/web_ui`
+die APIs des Ruby-Servers. Das esbuild-Bundle wird nach `lib/mxrb/web_ui`
 kompiliert, in die Gem aufgenommen und lokal ausgeliefert. Node.js ist daher
 für die Nutzung des installierten Editors nicht erforderlich, und es wird kein
 CDN kontaktiert. Für die UI-Entwicklung werden in `frontend/modeler`

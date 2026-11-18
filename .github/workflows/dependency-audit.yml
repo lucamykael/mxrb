@@ -1,0 +1,37 @@
+name: Modeler dependency audit
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "15 9 * * *"
+  pull_request:
+    paths:
+      - frontend/modeler/package.json
+      - frontend/modeler/package-lock.json
+      - .github/workflows/dependency-audit.yml
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/modeler/package-lock.json
+      - run: npm ci
+        working-directory: frontend/modeler
+      - name: Audit all dependencies, including build tools
+        working-directory: frontend/modeler
+        run: npm audit --json > "${RUNNER_TEMP}/npm-audit.json"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: modeler-dependency-audit
+          path: |
+            ${{ runner.temp }}/npm-audit.json
+          retention-days: 30

@@ -23,6 +23,7 @@ type RpcListener = (event: { data: unknown }) => void;
         case 'initialize': return reply(request, {});
         case 'host/context': return reply(request, context());
         case 'catalog/list': return reply(request, catalog);
+        case 'tasks/configurations': return reply(request, { configurations: [] });
         case 'project/status': return reply(request, { source_model: context().source_model,
           state: revision ? 'ready' : 'missing', root: revision ? rubyRoot() : null });
         case 'files/list': {

@@ -211,7 +211,7 @@ esse lifecycle criou. O controle usa um endpoint privado autenticado em loopback
 estado e token ficam em arquivos locais com permissões restritas.
 
 A interface do editor é implementada em React + TypeScript e consome somente as
-APIs do servidor Ruby. O bundle Vite é compilado em `lib/mxrb/web_ui`, incluído
+APIs do servidor Ruby. O bundle esbuild é compilado em `lib/mxrb/web_ui`, incluído
 na gem e servido localmente; portanto Node.js não é necessário para usar o
 editor instalado e nenhum CDN é acessado. Para desenvolver a interface, use
 `npm install`, `npm run typecheck` e `npm run build` em `frontend/modeler`.

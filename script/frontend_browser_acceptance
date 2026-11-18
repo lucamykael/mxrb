@@ -90,7 +90,7 @@ module MxrbFrontendBrowserAcceptance
 
     def wait_for_endpoint
       path = File.join(@profile, 'DevToolsActivePort')
-      100.times do
+      600.times do
         if File.file?(path)
           port, endpoint = File.readlines(path, chomp: true)
           return URI("ws://127.0.0.1:#{Integer(port)}#{endpoint}")

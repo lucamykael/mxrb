@@ -11,6 +11,13 @@ on:
     paths:
       - '.github/workflows/legacy-mxbuild.yml'
       - 'script/mxbuild_oracle*'
+      - 'script/certify_presentation_edits'
+      - 'script/presentation_edit_support.rb'
+      - 'script/prepare_oracle_dependencies'
+      - 'script/benchmark_support.rb'
+      - 'spec/fixtures/presentation_edits/**'
+      - 'lib/mxrb/ruby_app/**'
+      - 'lib/mxrb/ruby_app.rb'
       - 'lib/mxrb/stored_fields.rb'
       - 'lib/mxrb/studio_compatibility*'
       - 'lib/mxrb/writer*'
@@ -45,19 +52,34 @@ jobs:
             git -C "${RUNNER_TEMP}/fixtures/$2" checkout --quiet "$3"
           }
           fetch ako/ConnectorKitDemo ConnectorKitDemo 9eed61f1fb737d189a3b018ac7691c87569053de
+          fetch ako/mxcli-sudoku sudoku 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
           fetch ako/QueryApiBlogPost QueryApiBlogPost f042c01fab6ab22181329db3043928859af35217
           fetch bhataparnak/MendixApp MendixApp 8912322e170e5babb4bf77461242ae51b555ca42
           fetch mendixlabs/TreeViewAndGridView TreeViewAndGridView efe16dc5f35087f98ee4128559bc2a88552b0d81
-      - name: Add the Data Widgets the 9.6 project uses but does not commit
-        # The project uses Data Widgets 2.0.0; 2.0.1 is the oldest release Mendix publishes.
-        # Both variants get the same widgets, so they cannot account for a difference.
+      - name: Restore the declared Mendix 7 Java dependencies with pinned checksums
         run: |
-          package="${RUNNER_TEMP}/DataWidgets.mpk"
-          curl -fsSL -o "$package" https://github.com/mendix/widgets-resources/releases/download/data-widgets-v2.0.1/DataWidgets_2_0_1.mpk
-          echo "31c729b38ab8d84db7ab0e979ab10c9ca070a3ed17bb5c93d4f24192a824dbc0  $package" | sha256sum --check
-          mkdir -p "${RUNNER_TEMP}/datawidgets" "${RUNNER_TEMP}/fixtures/MendixApp/widgets"
-          unzip -q "$package" -d "${RUNNER_TEMP}/datawidgets"
-          find "${RUNNER_TEMP}/datawidgets" -name '*.mpk' -exec cp {} "${RUNNER_TEMP}/fixtures/MendixApp/widgets/" \;
+          bundle exec ruby script/prepare_oracle_dependencies \
+            spec/fixtures/presentation_edits/connector-dependencies.json \
+            "${RUNNER_TEMP}/fixtures/ConnectorKitDemo/userlib"
+      - name: Restore the omitted Atlas 3 theme and widgets without changing the model
+        run: |
+          cp -R spec/fixtures/presentation_edits/mendix9-theme/. "${RUNNER_TEMP}/fixtures/MendixApp/theme/"
+          ruby -rjson -rdigest -rtmpdir <<'RUBY'
+          target = File.join(ENV.fetch('RUNNER_TEMP'), 'fixtures/MendixApp')
+          manifest = JSON.parse(File.read('spec/fixtures/presentation_edits/mendix9-assets.json'))
+          Dir.mktmpdir do |cache|
+            manifest.fetch('artifacts').each_with_index do |entry, index|
+              package = File.join(cache, "#{index}.mpk")
+              system('curl', '-fsSL', '--retry', '2', '-o', package, entry.fetch('url'), exception: true)
+              abort 'asset checksum mismatch' unless Digest::SHA256.file(package).hexdigest == entry.fetch('sha256')
+              # Only resources: never import project.mpr or replace documents from a module package.
+              entries = IO.popen(['unzip', '-Z1', package], &:read).lines.map(&:strip)
+              resources = entries.select { _1.start_with?('themesource/', 'widgets/') && !_1.end_with?('/') }
+              abort 'unsafe asset path' if resources.any? { _1.split('/').include?('..') }
+              system('unzip', '-qo', package, *resources, '-d', target, exception: true)
+            end
+          end
+          RUBY
       - name: Rebuild each project through project.rb
         run: |
           f="${RUNNER_TEMP}/fixtures"
@@ -66,6 +88,34 @@ jobs:
             "query-api-7.17.0=$f/QueryApiBlogPost/QueryApiBlogPost.mpr" \
             "first-medix-9.6.1=$f/MendixApp/FirstMedix App.mpr" \
             "grid-view-6.10.8=$f/TreeViewAndGridView/test_6_10_8/GridViewPlayground.mpr"
+      - name: Certify presentation edits and prepare their native oracle inputs
+        run: |
+          f="${RUNNER_TEMP}/fixtures"
+          ln -s ConnectorKitDemo "$f/connector"
+          ln -s MendixApp "$f/mendix9"
+          for label in mendix7 mendix9 mendix11; do
+            bundle exec ruby script/certify_presentation_edits \
+              --plan spec/fixtures/presentation_edits/cases.json --fixtures "$f" \
+              --label "$label" --output "${RUNNER_TEMP}/edits-$label"
+          done
+          ruby -rjson -rfileutils <<'RUBY'
+          root = File.join(ENV.fetch('RUNNER_TEMP'), 'oracle')
+          cases = JSON.parse(File.read(File.join(root, 'cases.json')))
+          %w[mendix7 mendix9 mendix11].each do |label|
+            edits = File.join(ENV.fetch('RUNNER_TEMP'), "edits-#{label}")
+            entry = JSON.parse(File.read(File.join(edits, 'cases.json'))).fetch(0)
+            name = "presentation-#{label}"
+            destination = File.join(root, name)
+            FileUtils.mkdir_p(destination)
+            %w[source rebuilt].each do |variant|
+              FileUtils.cp_r(File.join(edits, entry.fetch(variant)), File.join(destination, variant))
+              entry[variant] = "#{name}/#{variant}"
+            end
+            FileUtils.cp(File.join(edits, 'edits.json'), destination)
+            cases << entry.merge('label' => name)
+          end
+          File.write(File.join(root, 'cases.json'), JSON.pretty_generate(cases))
+          RUBY
       - uses: actions/upload-artifact@v4
         with:
           name: oracle-inputs
@@ -96,7 +146,23 @@ jobs:
             mxbuild: 9.6.1.29396
             sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
             java: "11"
-    name: mxbuild ${{ matrix.mxbuild }}
+          - label: presentation-mendix7
+            require_build: --require-build
+            mxbuild: 7.5.0
+            sha256: c7a5e78c58c91e05c3c4d7a05ac80d90e5e2e0287b752e049025895e3d23790d
+            java: "8"
+          - label: presentation-mendix9
+            require_build: --require-build
+            mxbuild: 9.6.1.29396
+            sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
+            java: "11"
+          - label: presentation-mendix11
+            require_build: --require-build
+            mxbuild: 11.12.1
+            archive_prefix: win-
+            sha256: 1c59f25e5933b68e90e122204c99ea4ff4cac88535b720eae882b24c48d0daa6
+            java: "21"
+    name: mxbuild ${{ matrix.label }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
@@ -119,7 +185,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'mxbuild.tar.gz'
-          $url = 'https://cdn.mendix.com/runtime/mxbuild-${{ matrix.mxbuild }}.tar.gz'
+          $url = 'https://cdn.mendix.com/runtime/${{ matrix.archive_prefix }}mxbuild-${{ matrix.mxbuild }}.tar.gz'
           try { Invoke-WebRequest $url -OutFile $archive -UseBasicParsing }
           catch { Write-Host "::error::GET $url failed: $($_.Exception.Message)"; exit 1 }
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -146,6 +212,7 @@ jobs:
           --mxbuild "$env:MXBUILD"
           --java-home "${{ steps.java.outputs.path }}"
           --label ${{ matrix.label }}
+          ${{ matrix.require_build }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:

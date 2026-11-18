@@ -4,6 +4,8 @@ param(
     [string]$WorkspaceRoot = 'C:\mxrb-projects',
     [ValidatePattern('^[a-zA-Z0-9.-]+$')][string]$StudioVersion = '11.12.1',
     [string]$ToolRoot,
+    [string]$JavaHome,
+    [ValidateRange(9,99)][int]$JavaMajorVersion = 21,
     [switch]$BuildToolsOnly,
     [ValidatePattern('^[a-fA-F0-9]{64}$')][string]$PinnedMxBuildSha256,
     [ValidateRange(1,120)][int]$BuildTimeoutMinutes = 30
@@ -192,26 +194,38 @@ function Invoke-CapturedProcess([string]$Executable, [string[]]$Arguments, [stri
     }
 }
 
-function Find-Java([string]$InstallRoot) {
+function Assert-JavaMajor([string]$Version, [string]$Kind) {
+    $pattern = if ($Kind -eq 'java') { '(?m)^(?:openjdk|java)(?: version)?\s+"?(\d+)(?:[.\s"-]|$)' } else { '(?m)^javac\s+(\d+)(?:[.\s+-]|$)' }
+    if ($Version -notmatch $pattern -or [int]$Matches[1] -ne $JavaMajorVersion) {
+        throw "Expected $Kind major version $JavaMajorVersion; found: $Version"
+    }
+}
+
+function Find-Java([string]$InstallRoot, [string]$ExplicitHome) {
     $candidates = New-Object System.Collections.Generic.List[string]
-    $javaRoots = @($InstallRoot, (Join-Path (Split-Path -Parent $InstallRoot) 'jdk'),
-                   (Join-Path (Split-Path -Parent $InstallRoot) 'runtime'))
-    foreach ($root in $javaRoots) {
-        if (Test-Path -LiteralPath $root -PathType Container) {
-            foreach ($file in (Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'java.exe' -ErrorAction SilentlyContinue)) {
-                $candidates.Add($file.FullName)
+    if ($ExplicitHome) {
+        # A configured JDK is authoritative. A failed probe must never select a different JDK from PATH.
+        $candidates.Add((Join-Path $ExplicitHome 'bin\java.exe'))
+    } else {
+        $javaRoots = @($InstallRoot, (Join-Path (Split-Path -Parent $InstallRoot) 'jdk'),
+                       (Join-Path (Split-Path -Parent $InstallRoot) 'runtime'))
+        foreach ($root in $javaRoots) {
+            if (Test-Path -LiteralPath $root -PathType Container) {
+                foreach ($file in (Get-ChildItem -LiteralPath $root -Recurse -File -Filter 'java.exe' -ErrorAction SilentlyContinue)) {
+                    $candidates.Add($file.FullName)
+                }
             }
         }
-    }
-    if ($env:JAVA_HOME) { $candidates.Add((Join-Path $env:JAVA_HOME 'bin\java.exe')) }
-    foreach ($command in @(Get-Command 'java.exe' -CommandType Application -All -ErrorAction SilentlyContinue)) {
-        $candidates.Add($command.Source)
-    }
-    foreach ($programRoot in @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ } | Select-Object -Unique) {
-        $adoptium = Join-Path $programRoot 'Eclipse Adoptium'
-        if (Test-Path -LiteralPath $adoptium -PathType Container) {
-            foreach ($file in (Get-ChildItem -LiteralPath $adoptium -Recurse -File -Filter 'java.exe' -ErrorAction SilentlyContinue)) {
-                $candidates.Add($file.FullName)
+        if ($env:JAVA_HOME) { $candidates.Add((Join-Path $env:JAVA_HOME 'bin\java.exe')) }
+        foreach ($command in @(Get-Command 'java.exe' -CommandType Application -All -ErrorAction SilentlyContinue)) {
+            $candidates.Add($command.Source)
+        }
+        foreach ($programRoot in @($env:ProgramFiles, ${env:ProgramFiles(x86)}) | Where-Object { $_ } | Select-Object -Unique) {
+            $adoptium = Join-Path $programRoot 'Eclipse Adoptium'
+            if (Test-Path -LiteralPath $adoptium -PathType Container) {
+                foreach ($file in (Get-ChildItem -LiteralPath $adoptium -Recurse -File -Filter 'java.exe' -ErrorAction SilentlyContinue)) {
+                    $candidates.Add($file.FullName)
+                }
             }
         }
     }
@@ -226,17 +240,20 @@ function Find-Java([string]$InstallRoot) {
             if (-not (Test-Path -LiteralPath $javac -PathType Leaf)) { throw 'JDK compiler javac.exe absent' }
             $out = Join-Path $resultRoot "java-$number.stdout.log"
             $err = Join-Path $resultRoot "java-$number.stderr.log"
-            $code = Invoke-CapturedProcess $java @('-version') $resultRoot $out $err 30000
+            $code = Invoke-CapturedProcess $java @('-version') $resultRoot $out $err 120000
             if ($code -ne 0) { throw "java -version returned $code" }
             $version = ([System.IO.File]::ReadAllText($out) + [System.IO.File]::ReadAllText($err)).Trim()
+            Assert-JavaMajor $version 'java'
             $compilerOut = Join-Path $resultRoot "javac-$number.stdout.log"
             $compilerErr = Join-Path $resultRoot "javac-$number.stderr.log"
-            $compilerCode = Invoke-CapturedProcess $javac @('-version') $resultRoot $compilerOut $compilerErr 30000
+            $compilerCode = Invoke-CapturedProcess $javac @('-version') $resultRoot $compilerOut $compilerErr 120000
             if ($compilerCode -ne 0) { throw "javac -version returned $compilerCode" }
+            $compilerVersion = ([System.IO.File]::ReadAllText($compilerOut) + [System.IO.File]::ReadAllText($compilerErr)).Trim()
+            Assert-JavaMajor $compilerVersion 'javac'
             Write-JsonFile @($attempts.ToArray()) (Join-Path $resultRoot 'java-rejected-candidates.json')
             return [ordered]@{
                 executable = $java; home = (Split-Path -Parent $bin); compiler = $javac; version = $version
-                compiler_version = ([System.IO.File]::ReadAllText($compilerOut) + [System.IO.File]::ReadAllText($compilerErr)).Trim()
+                compiler_version = $compilerVersion; required_major_version = $JavaMajorVersion
             }
         } catch {
             $attempts.Add([ordered]@{ path = $java; error = $_.Exception.Message })
@@ -280,7 +297,7 @@ try {
     }
     $orderedCases = @($cases)
     $toolsReport = Find-StudioTools
-    $toolsReport['java'] = Find-Java $toolsReport.install_root
+    $toolsReport['java'] = Find-Java $toolsReport.install_root $JavaHome
     Write-JsonFile $toolsReport (Join-Path $resultRoot 'tools.json')
     foreach ($parent in @($WorkspaceRoot, $workspace)) {
         if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent | Out-Null }

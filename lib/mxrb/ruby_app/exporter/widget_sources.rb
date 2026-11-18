@@ -203,6 +203,13 @@ module Mxrb
         def presentation_form_widget_source(widget, indentation)
           options = widget.fetch('options')
           document = @native_fragment_store.fetch(options.fetch('native_fragment').fetch('digest'))
+          # The typed Forms catalog describes Mendix 11. Legacy-only widgets
+          # keep all fields inline; the temporary fragment store is not exported.
+          if @project.mendix_version.to_i < 8
+            arguments = [widget.fetch('name').inspect, "type: #{options.fetch('native_type').inspect}",
+                         "deep_structure: #{runtime_value(document).inspect}"]
+            return runtime_widget_declaration('native_widget', arguments, indentation, false)
+          end
           document = document.merge('$Type' => options.fetch('native_type'), 'Name' => widget.fetch('name'))
           node = Forms::MprCodec.new.decode(document)
           source = Forms::SourceEmitter.new.emit(node).lines.map { "#{' ' * (indentation + 2)}#{_1}" }.join

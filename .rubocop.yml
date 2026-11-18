@@ -9,6 +9,7 @@ AllCops:
     - "script/*"
   Exclude:
     - "coverage/**/*"
+    - "local-projects/**/*"
     - "tmp/**/*"
     - "vendor/**/*"
     - "script/*.ps1"

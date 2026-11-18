@@ -1,0 +1,92 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'digest'
+require 'optparse'
+require_relative 'benchmark_support'
+
+module PipelineBenchmark
+  # Produces a reviewable budget from independent, compatible measurements.
+  module Calibration
+    module_function
+
+    def build(reports, margin: 1.5) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      raise ArgumentError, 'at least three reports are required' if reports.size < 3
+      raise ArgumentError, 'margin must be finite and greater than one' unless
+        margin.is_a?(Numeric) && margin.finite? && margin > 1
+
+      identity = reports.first.fetch('compatibility')
+      observations = reports.map { validate_report(_1, identity) }
+      ranges = METRICS.to_h do |metric|
+        values = observations.map { _1.fetch(metric) }
+        [metric, { 'min' => values.min, 'max' => values.max, 'median' => PipelineBenchmark.median(values) }]
+      end
+      limits = ranges.transform_values { [(_1.fetch('max') * margin).round(6), 0.000001].max }
+      Budget.new({ 'schema_version' => 1, 'compatibility' => identity, 'limits_seconds' => limits }, identity)
+      { 'schema_version' => 1, 'compatibility' => identity,
+        'limits_seconds' => limits,
+        'calibration' => { 'reports' => reports.size, 'margin' => margin,
+                           'policy' => 'margin times the largest observed median for each metric',
+                           'observed_seconds' => ranges } }
+    end
+
+    def validate_report(report, identity) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      raise ArgumentError, 'unsupported measurement schema' unless report.fetch('schema_version') == 1
+      raise ArgumentError, 'incompatible calibration reports' unless report.fetch('compatibility') == identity
+      raise ArgumentError, 'calibration needs at least three samples per report' unless identity.fetch('runs') >= 3
+
+      samples = report.fetch('samples')
+      raise ArgumentError, 'sample count does not match compatibility' unless samples.size == identity.fetch('runs')
+
+      samples.each { validate_sample(_1) }
+      normalized = samples.map do |sample|
+        { measurements_seconds: sample.fetch('measurements_seconds'), total_seconds: sample.fetch('total_seconds') }
+      end
+      actual = measurements(report)
+      summary = PipelineBenchmark.summarize(normalized)
+      expected = summary.fetch(:measurements_seconds).merge('total' => summary.fetch(:total_seconds))
+      raise ArgumentError, 'reported medians do not match samples' unless actual == expected
+
+      actual
+    end
+
+    def validate_sample(sample)
+      values = measurements(sample)
+      total = values.delete('total')
+      return if (values.values.sum - total).abs <= 0.000001
+
+      raise ArgumentError, 'sample total does not match its stages'
+    end
+
+    def measurements(report)
+      values = report.fetch('measurements_seconds').merge('total' => report.fetch('total_seconds'))
+      unless values.keys.sort == METRICS.sort && values.values.all? { _1.is_a?(Numeric) && _1.finite? && _1.positive? }
+        raise ArgumentError, 'all metrics must contain positive finite measurements'
+      end
+
+      values
+    end
+
+    def cli(argv) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+      options = { margin: 1.5 }
+      OptionParser.new do |parser|
+        parser.banner = 'Usage: script/calibrate_benchmark [--margin FACTOR] REPORT.json REPORT.json REPORT.json ...'
+        parser.on('--margin FACTOR', Float) { options[:margin] = _1 }
+      end.parse!(argv)
+      contents = argv.map { File.binread(_1) }
+      digests = contents.map { Digest::SHA256.hexdigest(_1) }
+      raise ArgumentError, 'calibration reports must be distinct' unless digests.uniq.size == digests.size
+
+      budget = build(contents.map { JSON.parse(_1) }, **options)
+      budget.fetch('calibration')['source_sha256'] = digests
+      puts JSON.pretty_generate(budget)
+      0
+    rescue ArgumentError, KeyError, JSON::ParserError, Errno::ENOENT, OptionParser::ParseError => e
+      warn JSON.generate(error: e.message)
+      2
+    end
+  end
+end
+
+exit PipelineBenchmark::Calibration.cli(ARGV) if $PROGRAM_NAME == __FILE__

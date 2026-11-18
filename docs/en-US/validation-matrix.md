@@ -428,8 +428,11 @@ Median total time was 9.6308 s: validation 0.7596 s, cold semantic index
 0.7839 s, warm index 0.0090 s, read-only index 0.8171 s, export 3.9405 s,
 generation 2.1941 s, and comparison 1.1322 s. Median warm-cache speedup was
 87.1x. The former 6.8463 s result is not a comparable baseline because it used
-a different step composition and did not record an environment/budget;
-automating a versioned performance budget remains open.
+a different step composition and did not record an environment/budget. On
+November 17, the [versioned budget](../guides/benchmark-budget.pt-BR.md)
+(Portuguese guide) was implemented with model/asset/environment identities and
+three samples: local calibration at 25.651754 s and an independent passing
+verification at 27.512983 s. CI collects samples for runner-specific limits.
 
 Deterministic fuzz tests additionally round-trip 250 nested BSON documents and
 50 atomic `.mxunit` files, including binary values, arrays and nested hashes.

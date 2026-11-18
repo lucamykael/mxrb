@@ -1,0 +1,131 @@
+{
+  "name": "persistent-page-drafts-reload",
+  "authentication": false,
+  "viewport": {
+    "width": 1280,
+    "height": 900
+  },
+  "pages": [
+    {
+      "name": "saved-after-reload",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_text": "Persistent page drafts"
+        },
+        {
+          "wait_for_selector": "input[value='Unsaved item']"
+        },
+        {
+          "click_text": "Change draft"
+        },
+        {
+          "wait_for_selector": "input[value='Changed before Save']"
+        },
+        {
+          "wait_for_selector": ".widget-datagrid-grid-body"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".widget-datagrid-grid-body [role=row]",
+            "equals": 0
+          }
+        },
+        {
+          "wait_for_absence": "[role=alert]"
+        },
+        {
+          "click_text": "Save draft"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".widget-datagrid-grid-body [role=row]",
+            "equals": 1
+          }
+        },
+        {
+          "wait_for_text": "Changed before Save"
+        },
+        {
+          "wait_for_absence": "[role=alert]"
+        },
+        {
+          "navigate": "/"
+        },
+        {
+          "wait_for_text": "Persistent page drafts"
+        },
+        {
+          "wait_for_selector": "input[value='Unsaved item']"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".widget-datagrid-grid-body [role=row]",
+            "equals": 1
+          }
+        },
+        {
+          "wait_for_selector": ".widget-datagrid-grid-body"
+        },
+        {
+          "wait_for_text": "Changed before Save"
+        }
+      ],
+      "selectors": [
+        "main"
+      ]
+    },
+    {
+      "name": "required-name-feedback",
+      "steps": [
+        {
+          "input_value": {
+            "selector": "input[type=text]",
+            "value": ""
+          }
+        },
+        {
+          "click_text": "Save draft"
+        },
+        {
+          "wait_for_selector": "[role=alert]"
+        },
+        {
+          "wait_for_text": "Name is required"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".widget-datagrid-grid-body [role=row]",
+            "equals": 1
+          }
+        }
+      ],
+      "selectors": [
+        "[role=alert]"
+      ]
+    },
+    {
+      "name": "no-invalid-row-after-reload",
+      "steps": [
+        {
+          "navigate": "/"
+        },
+        {
+          "wait_for_count": {
+            "selector": ".widget-datagrid-grid-body [role=row]",
+            "equals": 1
+          }
+        },
+        {
+          "wait_for_text": "Changed before Save"
+        },
+        {
+          "wait_for_absence": "[role=alert]"
+        }
+      ],
+      "selectors": [
+        "main"
+      ]
+    }
+  ]
+}

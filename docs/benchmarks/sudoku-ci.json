@@ -1,0 +1,495 @@
+{
+  "schema_version": 2,
+  "budgets": [
+    {
+      "schema_version": 1,
+      "compatibility": {
+        "protocol": "mxrb-pipeline-v1",
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "environment": {
+          "ruby_engine": "ruby",
+          "ruby_version": "4.0.5",
+          "platform": "x86_64-linux",
+          "cpu": "AMD EPYC 7763 64-Core Processor",
+          "processors": 4
+        },
+        "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+        "runs": 3
+      },
+      "limits_seconds": {
+        "validate": 1.886982,
+        "semantic_index_cold": 1.967358,
+        "semantic_index_warm": 0.032108,
+        "semantic_index_readonly": 1.936427,
+        "export": 10.103292,
+        "generate": 44.578148,
+        "compare": 8.135352,
+        "total": 68.312998
+      },
+      "calibration": {
+        "reports": 3,
+        "margin": 1.5,
+        "policy": "margin times the largest observed median for each metric",
+        "observed_seconds": {
+          "validate": {
+            "min": 1.211881,
+            "max": 1.257988,
+            "median": 1.21203
+          },
+          "semantic_index_cold": {
+            "min": 1.292541,
+            "max": 1.311572,
+            "median": 1.306229
+          },
+          "semantic_index_warm": {
+            "min": 0.016998,
+            "max": 0.021405,
+            "median": 0.019013
+          },
+          "semantic_index_readonly": {
+            "min": 1.249073,
+            "max": 1.290951,
+            "median": 1.289216
+          },
+          "export": {
+            "min": 6.61757,
+            "max": 6.735528,
+            "median": 6.654757
+          },
+          "generate": {
+            "min": 28.987537,
+            "max": 29.718765,
+            "median": 29.562735
+          },
+          "compare": {
+            "min": 5.363917,
+            "max": 5.423568,
+            "median": 5.377655
+          },
+          "total": {
+            "min": 45.281323,
+            "max": 45.541999,
+            "median": 45.435234
+          }
+        },
+        "source_sha256": [
+          "a831cedea34082d0fcfd4b9695c29586fc73aeef82b2c91693b8f69dae2c0c0e",
+          "e392a2a55ccad600904add10fbe0507ec6bf7f98d86dd42a632ec61df9f8032a",
+          "fc2f1c9343be01fbaff470360f02008d8475c56db9ff485793fe43050e0b6dd8"
+        ],
+        "sources": [
+          {
+            "run": "https://github.com/lucamykael/mxrb/actions/runs/44335031203",
+            "artifact": "pipeline-performance-1",
+            "runner": {
+              "ImageOS": "ubuntu24",
+              "ImageVersion": "20261111.370.1",
+              "RUNNER_OS": "Linux",
+              "RUNNER_ARCH": "X64",
+              "GITHUB_SHA": "80f4e48ed30c468954bf04a432181363c0dd3956",
+              "GITHUB_RUN_ID": "44335031203"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": 1,
+      "compatibility": {
+        "protocol": "mxrb-pipeline-v1",
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "environment": {
+          "ruby_engine": "ruby",
+          "ruby_version": "4.0.5",
+          "platform": "x86_64-linux",
+          "cpu": "Intel(R) Xeon(R) 6975P-C",
+          "processors": 4
+        },
+        "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+        "runs": 3
+      },
+      "limits_seconds": {
+        "validate": 1.218138,
+        "semantic_index_cold": 1.28586,
+        "semantic_index_warm": 0.018932,
+        "semantic_index_readonly": 1.254474,
+        "export": 6.498753,
+        "generate": 28.427258,
+        "compare": 5.21292,
+        "total": 43.77224
+      },
+      "calibration": {
+        "reports": 6,
+        "margin": 1.5,
+        "policy": "margin times the largest observed median for each metric",
+        "observed_seconds": {
+          "validate": {
+            "min": 0.737571,
+            "max": 0.812092,
+            "median": 0.7677849999999999
+          },
+          "semantic_index_cold": {
+            "min": 0.736924,
+            "max": 0.85724,
+            "median": 0.768079
+          },
+          "semantic_index_warm": {
+            "min": 0.009088,
+            "max": 0.012621,
+            "median": 0.00971
+          },
+          "semantic_index_readonly": {
+            "min": 0.686676,
+            "max": 0.836316,
+            "median": 0.764758
+          },
+          "export": {
+            "min": 3.865612,
+            "max": 4.332502,
+            "median": 4.0805715
+          },
+          "generate": {
+            "min": 17.600533,
+            "max": 18.951505,
+            "median": 18.2334735
+          },
+          "compare": {
+            "min": 3.100385,
+            "max": 3.47528,
+            "median": 3.2950105
+          },
+          "total": {
+            "min": 26.957602,
+            "max": 29.181493,
+            "median": 27.9067015
+          }
+        },
+        "source_sha256": [
+          "34beb03ecfedd08b3206e16d8a9d56f02b03d861b1952ec46623d5e5ce4c5ee6",
+          "cec0b365eff7323dfd221c9bb96abd5a731ea77bde6a45e7f8da584585f48cb7",
+          "f7ac06983c137e7b01fb8048e3eb1231b3498141c266550a4ca2f74f94004046",
+          "58d393182924aab60f2e7024c077b6a24549c469f6d37d25158a7c91eeff7469",
+          "b621fda31ed3ab7a948f070b19560cbc88f4ba90a476fa189d4d7934dc890c87",
+          "8c4b6f40d6bb76e8c6bbf26cd5356da46fc8b2f8b4a6d475eb79816b6465308d"
+        ],
+        "sources": [
+          {
+            "run": "https://github.com/lucamykael/mxrb/actions/runs/44335031203",
+            "artifact": "pipeline-performance-2",
+            "runner": {
+              "ImageOS": "ubuntu24",
+              "ImageVersion": "20261116.133.1",
+              "RUNNER_OS": "Linux",
+              "RUNNER_ARCH": "X64",
+              "GITHUB_SHA": "80f4e48ed30c468954bf04a432181363c0dd3956",
+              "GITHUB_RUN_ID": "44335031203"
+            }
+          },
+          {
+            "run": "https://github.com/lucamykael/mxrb/actions/runs/44336874281",
+            "artifact": "pipeline-performance-3",
+            "runner": {
+              "ImageOS": "ubuntu24",
+              "ImageVersion": "20261111.127.1",
+              "RUNNER_OS": "Linux",
+              "RUNNER_ARCH": "X64",
+              "GITHUB_SHA": "4743eb608f987df6e1c1437d5cca9953e9a1d50f",
+              "GITHUB_RUN_ID": "44336874281"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": 1,
+      "compatibility": {
+        "protocol": "mxrb-pipeline-v1",
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "environment": {
+          "ruby_engine": "ruby",
+          "ruby_version": "4.0.5",
+          "platform": "x86_64-linux",
+          "cpu": "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz",
+          "processors": 4
+        },
+        "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+        "runs": 3
+      },
+      "limits_seconds": {
+        "validate": 1.781679,
+        "semantic_index_cold": 1.835942,
+        "semantic_index_warm": 0.026141,
+        "semantic_index_readonly": 1.75109,
+        "export": 9.183099,
+        "generate": 42.989777,
+        "compare": 7.518155,
+        "total": 64.589352
+      },
+      "calibration": {
+        "reports": 3,
+        "margin": 1.5,
+        "policy": "margin times the largest observed median for each metric",
+        "observed_seconds": {
+          "validate": {
+            "min": 1.145152,
+            "max": 1.187786,
+            "median": 1.152061
+          },
+          "semantic_index_cold": {
+            "min": 1.169651,
+            "max": 1.223961,
+            "median": 1.188069
+          },
+          "semantic_index_warm": {
+            "min": 0.015695,
+            "max": 0.017427,
+            "median": 0.016199
+          },
+          "semantic_index_readonly": {
+            "min": 1.131929,
+            "max": 1.167393,
+            "median": 1.160495
+          },
+          "export": {
+            "min": 6.012764,
+            "max": 6.122066,
+            "median": 6.072859
+          },
+          "generate": {
+            "min": 28.132444,
+            "max": 28.659851,
+            "median": 28.352377
+          },
+          "compare": {
+            "min": 4.898067,
+            "max": 5.012103,
+            "median": 4.91789
+          },
+          "total": {
+            "min": 42.670184,
+            "max": 43.059568,
+            "median": 42.878854
+          }
+        },
+        "source_sha256": [
+          "e93ebd9f74aab8d780c5222e261bcfbb22acc57a89eaa409421237757b18e903",
+          "b5e73f0715bb6807524f7c8747cd2d7020014fadaf4075d80881b7d343481ecc",
+          "b7dbe52be3c877b282ca045082e70a83128b696508e244e6dfa6cde59493dad2"
+        ],
+        "sources": [
+          {
+            "run": "https://github.com/lucamykael/mxrb/actions/runs/44335031203",
+            "artifact": "pipeline-performance-3",
+            "runner": {
+              "ImageOS": "ubuntu24",
+              "ImageVersion": "20261111.370.1",
+              "RUNNER_OS": "Linux",
+              "RUNNER_ARCH": "X64",
+              "GITHUB_SHA": "80f4e48ed30c468954bf04a432181363c0dd3956",
+              "GITHUB_RUN_ID": "44335031203"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": 1,
+      "compatibility": {
+        "protocol": "mxrb-pipeline-v1",
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "environment": {
+          "ruby_engine": "ruby",
+          "ruby_version": "4.0.5",
+          "platform": "x86_64-linux",
+          "cpu": "AMD EPYC 9V74 80-Core Processor",
+          "processors": 4
+        },
+        "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+        "runs": 3
+      },
+      "limits_seconds": {
+        "validate": 1.659768,
+        "semantic_index_cold": 1.873807,
+        "semantic_index_warm": 0.021782,
+        "semantic_index_readonly": 1.823589,
+        "export": 8.79282,
+        "generate": 40.068816,
+        "compare": 7.432068,
+        "total": 61.075613
+      },
+      "calibration": {
+        "reports": 3,
+        "margin": 1.5,
+        "policy": "margin times the largest observed median for each metric",
+        "observed_seconds": {
+          "validate": {
+            "min": 1.090487,
+            "max": 1.106512,
+            "median": 1.094487
+          },
+          "semantic_index_cold": {
+            "min": 1.170987,
+            "max": 1.249205,
+            "median": 1.204684
+          },
+          "semantic_index_warm": {
+            "min": 0.013188,
+            "max": 0.014521,
+            "median": 0.014321
+          },
+          "semantic_index_readonly": {
+            "min": 1.171734,
+            "max": 1.215726,
+            "median": 1.183606
+          },
+          "export": {
+            "min": 5.817396,
+            "max": 5.86188,
+            "median": 5.838788
+          },
+          "generate": {
+            "min": 26.065949,
+            "max": 26.712544,
+            "median": 26.16739
+          },
+          "compare": {
+            "min": 4.762085,
+            "max": 4.954712,
+            "median": 4.871577
+          },
+          "total": {
+            "min": 40.30549,
+            "max": 40.717075,
+            "median": 40.626694
+          }
+        },
+        "source_sha256": [
+          "83db4bdbfbd5d14134d177bf0bf6cc89a17d4c54868b01e42df626f4ffd1fcb8",
+          "7decb6e908d71f08a8b97313326bb949ef48a0c50f6ee3e9882aa78408fb5d92",
+          "2cc1845109a151b34bd9ac82cd0fb6e42f938c8dc6416fd6909b653200db1c70"
+        ],
+        "sources": [
+          {
+            "run": "https://github.com/lucamykael/mxrb/actions/runs/44336874281",
+            "artifact": "pipeline-performance-1",
+            "runner": {
+              "ImageOS": "ubuntu24",
+              "ImageVersion": "20261111.370.1",
+              "RUNNER_OS": "Linux",
+              "RUNNER_ARCH": "X64",
+              "GITHUB_SHA": "4743eb608f987df6e1c1437d5cca9953e9a1d50f",
+              "GITHUB_RUN_ID": "44336874281"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "schema_version": 1,
+      "compatibility": {
+        "protocol": "mxrb-pipeline-v1",
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "environment": {
+          "ruby_engine": "ruby",
+          "ruby_version": "4.0.5",
+          "platform": "x86_64-linux",
+          "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+          "processors": 4
+        },
+        "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+        "runs": 3
+      },
+      "limits_seconds": {
+        "validate": 1.369197,
+        "semantic_index_cold": 1.493078,
+        "semantic_index_warm": 0.020795,
+        "semantic_index_readonly": 1.403658,
+        "export": 7.218704,
+        "generate": 33.371226,
+        "compare": 6.09153,
+        "total": 51.540696
+      },
+      "calibration": {
+        "reports": 3,
+        "margin": 1.5,
+        "policy": "margin times the largest observed median for each metric",
+        "observed_seconds": {
+          "validate": {
+            "min": 0.890246,
+            "max": 0.912798,
+            "median": 0.906499
+          },
+          "semantic_index_cold": {
+            "min": 0.882366,
+            "max": 0.995385,
+            "median": 0.941578
+          },
+          "semantic_index_warm": {
+            "min": 0.011834,
+            "max": 0.013863,
+            "median": 0.013242
+          },
+          "semantic_index_readonly": {
+            "min": 0.859276,
+            "max": 0.935772,
+            "median": 0.920499
+          },
+          "export": {
+            "min": 4.598458,
+            "max": 4.812469,
+            "median": 4.766667
+          },
+          "generate": {
+            "min": 21.405052,
+            "max": 22.247484,
+            "median": 21.76393
+          },
+          "compare": {
+            "min": 3.769028,
+            "max": 4.06102,
+            "median": 4.031395
+          },
+          "total": {
+            "min": 32.679219,
+            "max": 34.360464,
+            "median": 33.402432
+          }
+        },
+        "source_sha256": [
+          "920428cf4df95d13cc2bdf4180b928883f7e8b4fc2edcad677344a1fdfa3a2e2",
+          "20b974162e438690ce5736fe33d08e2ba2975b8ffb3bd0b159a6e3d083e73143",
+          "20503d149bbbb45a3d2563b6ebffa7d880219d9e02b60e15a20e4a57c1c55eec"
+        ],
+        "sources": [
+          {
+            "run": "https://github.com/lucamykael/mxrb/actions/runs/44336874281",
+            "artifact": "pipeline-performance-2",
+            "runner": {
+              "ImageOS": "ubuntu24",
+              "ImageVersion": "20261111.370.1",
+              "RUNNER_OS": "Linux",
+              "RUNNER_ARCH": "X64",
+              "GITHUB_SHA": "4743eb608f987df6e1c1437d5cca9953e9a1d50f",
+              "GITHUB_RUN_ID": "44336874281"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

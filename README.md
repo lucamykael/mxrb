@@ -159,6 +159,11 @@ and persisted state through entity/XPath count assertions.
 
 ## Development
 
+The current delivery queue and acceptance criteria are tracked in the
+[Portuguese backlog](docs/planning/backlog.pt-BR.md). The Java sidecar integration tests
+require JDK 21 (`java` and `javac` on `PATH`), and HTTP tests require loopback
+sockets. CI pins the external acceptance fixtures and runs the Studio UI tests.
+
 ```sh
 bundle exec rspec
 MXRB_COVERAGE=1 bundle exec rspec

@@ -20,7 +20,8 @@ module Mxrb
       end
 
       def native_ids
-        native_documents.flat_map { custom_widget_types(_1) }.select { _1['WidgetPluginWidget'] == true }
+        native_documents.flat_map { custom_widget_types(_1) }
+                        .select { _1['WidgetPluginWidget'] == true }
                         .map { _1['WidgetId'].to_s }.uniq
       end
 

@@ -1,0 +1,117 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'json'
+require 'optparse'
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require 'mxrb'
+require_relative 'benchmark_support'
+require_relative 'presentation_edit_support'
+load File.expand_path('mxbuild_oracle_inputs', __dir__)
+
+# Certifies pinned Ruby edits against independently edited expected native documents.
+module PresentationEditCertification
+  extend NativeEdits
+
+  module_function
+
+  def output_path(output, fixtures, cases)
+    output = File.join(File.realpath(File.dirname(File.expand_path(output))), File.basename(output))
+    raise ArgumentError, 'output already exists' if File.exist?(output) || File.symlink?(output)
+
+    cases.each do |test_case|
+      source = within(fixtures, test_case.fetch('mpr'))
+      raise ArgumentError, 'output must be outside the source project' if output.start_with?("#{File.dirname(source)}/")
+    end
+    output
+  end
+
+  def prepare(source, directory)
+    source_dir = MxbuildOracleInputs.copy_project(source, File.join(directory, 'source'))
+    expected_dir = MxbuildOracleInputs.copy_project(source, File.join(directory, 'expected'))
+    rebuilt_dir = MxbuildOracleInputs.copy_project(source, File.join(directory, 'rebuilt'))
+    copy_theme_cache(source, [source_dir, expected_dir, rebuilt_dir])
+    ruby = File.join(directory, 'ruby')
+    Mxrb::Exporter.new(source, ruby, mode: :ruby).export!
+    detach_runtime(ruby)
+    [source_dir, expected_dir, rebuilt_dir, ruby]
+  end
+
+  def detach_runtime(ruby)
+    manifest = Mxrb::RubyApp::Manifest.load(ruby)
+    runtime = within(ruby, manifest.absolute_path('runtime_mpr').delete_prefix("#{ruby}/"))
+    FileUtils.rm_rf(File.dirname(runtime))
+  end
+
+  def copy_theme_cache(source, destinations)
+    cache = File.join(File.dirname(source), 'theme-cache')
+    return unless File.directory?(cache)
+
+    destinations.each { FileUtils.cp_r(cache, _1) }
+  end
+
+  def certify(test_case, fixtures, output) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    label = test_case.fetch('label')
+    source = within(fixtures, test_case.fetch('mpr'))
+    MxbuildOracleInputs.validate_input(label, source)
+    identity = PipelineBenchmark.fixture_identity(source)
+    raise ArgumentError, "fixture checksum mismatch: #{label}" unless identity == test_case.fetch('fixture')
+
+    directory = File.join(output, label)
+    source_dir, expected_dir, rebuilt_dir, ruby = prepare(source, directory)
+    name = File.basename(source)
+    baseline = File.join(directory, 'baseline', name)
+    Mxrb::RubyApp.compile(ruby, baseline)
+    assert_identical(source, baseline)
+    edits = test_case.fetch('edits')
+    expected = File.join(expected_dir, name)
+    changes = edit_expected(expected, edits)
+    edit_ruby(ruby, edits)
+    rebuilt = File.join(rebuilt_dir, name)
+    Mxrb::RubyApp.compile(ruby, rebuilt)
+    assert_identical(expected, rebuilt)
+    verify_values(rebuilt, edits)
+    raise 'original fixture changed' unless PipelineBenchmark.fixture_identity(source) == identity
+
+    { label:, passed: true, version: Mxrb.open(source, &:mendix_version), mpr: name,
+      source: source_dir.delete_prefix("#{output}/"), rebuilt: rebuilt_dir.delete_prefix("#{output}/"),
+      fixture: identity, repository: test_case['repository'], revision: test_case['revision'],
+      rebuilt_from: 'mendix_sidecar', changes:, differences: Mxrb.compare(source, rebuilt).differences,
+      native_oracle: 'not_run' }
+  end
+
+  def run(plan, fixtures, output, label: nil) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength, Metrics/CyclomaticComplexity
+    raise ArgumentError, 'unsupported plan schema' unless plan.fetch('schema_version') == 1
+    raise ArgumentError, 'output already exists' if File.exist?(output)
+
+    cases = plan.fetch('cases').select { label.nil? || _1.fetch('label') == label }
+    raise ArgumentError, 'no cases selected' if cases.empty?
+
+    labels = cases.map { _1.fetch('label').downcase }
+    raise ArgumentError, 'duplicate case label' unless labels.uniq.size == labels.size
+
+    output = output_path(output, fixtures, cases)
+    FileUtils.mkdir_p(output)
+    results = cases.map do |test_case|
+      certify(test_case, fixtures, output)
+    rescue StandardError => e
+      { label: test_case.fetch('label'), passed: false, error: "#{e.class}: #{e.message}" }
+    end
+    report = { passed: results.all? { _1.fetch(:passed) }, cases: results }
+    File.write(File.join(output, 'edits.json'), JSON.pretty_generate(report))
+    File.write(File.join(output, 'cases.json'), JSON.pretty_generate(results.select { _1[:passed] }))
+    report
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  options = {}
+  OptionParser.new do |parser|
+    parser.banner = 'Usage: script/certify_presentation_edits --plan FILE --fixtures DIR --output DIR [--label NAME]'
+    %i[plan fixtures output label].each { |key| parser.on("--#{key} VALUE") { options[key] = _1 } }
+  end.parse!
+  report = PresentationEditCertification.run(JSON.parse(File.read(options.fetch(:plan))), options.fetch(:fixtures),
+                                             options.fetch(:output), label: options[:label])
+  puts JSON.pretty_generate(report)
+  exit(report.fetch(:passed) ? 0 : 1)
+end
