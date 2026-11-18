@@ -124,6 +124,21 @@ zero diagnósticos nos dois modelos, dois pacotes novos gerados pelo MxBuild
 11.12.1 e os 21 passos aprovados no Chromium. Projetos privados e seus
 diagnósticos ficam fora desses artefatos públicos.
 
+## Consultas de views no Mendix 10
+
+No Mendix 10.24, a consulta precisa estar em `Source.Oql` da entidade. Manter
+somente `SourceDocument` e o documento de consulta pode causar `CE6775`, mesmo
+com o texto OQL preservado no projeto. A escrita e a sincronização Ruby agora
+mantêm a consulta inline no Mendix 10 e atualizam o documento correspondente;
+o Mendix 11 continua usando a referência ao documento.
+
+`legacy_oql_view_spec.rb` cobre geração, os dois modos de exportação, edição
+da consulta por Ruby e preservação de uma consulta existente quando somente a
+referência é declarada. A fixture pública está em
+`spec/fixtures/legacy_oql_view/project.rb`; para checagem nativa, aplique-a a
+um projeto Blank criado pelo `mx create-project` do Mendix 10.24, que fornece
+as configurações e recursos completos dessa versão.
+
 ## Backlog de editabilidade
 
 | ID | Prioridade | Operação | Situação e prova necessária |
