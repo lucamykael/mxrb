@@ -25,9 +25,6 @@ jobs:
           cache-dependency-path: frontend/modeler/package-lock.json
       - run: npm ci
         working-directory: frontend/modeler
-      - name: Record upstream version
-        working-directory: frontend/modeler
-        run: npm view picomatch version --json > "${RUNNER_TEMP}/picomatch-version.json"
       - name: Audit all dependencies, including build tools
         working-directory: frontend/modeler
         run: npm audit --json > "${RUNNER_TEMP}/npm-audit.json"
@@ -37,5 +34,4 @@ jobs:
           name: modeler-dependency-audit
           path: |
             ${{ runner.temp }}/npm-audit.json
-            ${{ runner.temp }}/picomatch-version.json
           retention-days: 30

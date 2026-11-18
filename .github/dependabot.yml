@@ -6,13 +6,11 @@ updates:
       interval: daily
     open-pull-requests-limit: 5
     groups:
-      vite-toolchain:
+      modeler-build:
         patterns:
-          - vite
-          - "@vitejs/*"
-          - tinyglobby
-          - fdir
-          - picomatch
+          - esbuild
+          - typescript
+          - "@types/*"
         update-types:
           - patch
           - minor

@@ -30,8 +30,8 @@ RSpec.describe 'TypeScript source policy' do
 
     expect(bundles).not_to be_empty
     expect(File.read(File.join(root, 'frontend/modeler/package.json'))).to include('"build":')
-    expect(File.read(File.join(root, 'frontend/modeler/vite.config.ts')))
-      .to include("outDir: '../../lib/mxrb/web_ui'")
+    expect(File.read(File.join(root, 'frontend/modeler/build.ts')))
+      .to include("'../../lib/mxrb/web_ui'")
   end
 end
 # rubocop:enable Metrics/BlockLength

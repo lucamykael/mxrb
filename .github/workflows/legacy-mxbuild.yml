@@ -60,16 +60,24 @@ jobs:
           bundle exec ruby script/prepare_oracle_dependencies \
             spec/fixtures/presentation_edits/connector-dependencies.json \
             "${RUNNER_TEMP}/fixtures/ConnectorKitDemo/userlib"
-      - name: Add the Data Widgets the 9.6 project uses but does not commit
-        # The project uses Data Widgets 2.0.0; 2.0.1 is the oldest release Mendix publishes.
-        # Both variants get the same widgets, so they cannot account for a difference.
+      - name: Restore the omitted Atlas 3 theme and widgets without changing the model
         run: |
-          package="${RUNNER_TEMP}/DataWidgets.mpk"
-          curl -fsSL -o "$package" https://github.com/mendix/widgets-resources/releases/download/data-widgets-v2.0.1/DataWidgets_2_0_1.mpk
-          echo "31c729b38ab8d84db7ab0e979ab10c9ca070a3ed17bb5c93d4f24192a824dbc0  $package" | sha256sum --check
-          mkdir -p "${RUNNER_TEMP}/datawidgets" "${RUNNER_TEMP}/fixtures/MendixApp/widgets"
-          unzip -q "$package" -d "${RUNNER_TEMP}/datawidgets"
-          find "${RUNNER_TEMP}/datawidgets" -name '*.mpk' -exec cp {} "${RUNNER_TEMP}/fixtures/MendixApp/widgets/" \;
+          ruby -rjson -rdigest -rtmpdir <<'RUBY'
+          target = File.join(ENV.fetch('RUNNER_TEMP'), 'fixtures/MendixApp')
+          manifest = JSON.parse(File.read('spec/fixtures/presentation_edits/mendix9-assets.json'))
+          Dir.mktmpdir do |cache|
+            manifest.fetch('artifacts').each_with_index do |entry, index|
+              package = File.join(cache, "#{index}.mpk")
+              system('curl', '-fsSL', '--retry', '2', '-o', package, entry.fetch('url'), exception: true)
+              abort 'asset checksum mismatch' unless Digest::SHA256.file(package).hexdigest == entry.fetch('sha256')
+              # Only resources: never import project.mpr or replace documents from a module package.
+              entries = IO.popen(['unzip', '-Z1', package], &:read).lines.map(&:strip)
+              resources = entries.select { _1.start_with?('themesource/', 'widgets/') && !_1.end_with?('/') }
+              abort 'unsafe asset path' if resources.any? { _1.split('/').include?('..') }
+              system('unzip', '-qo', package, *resources, '-d', target, exception: true)
+            end
+          end
+          RUBY
       - name: Rebuild each project through project.rb
         run: |
           f="${RUNNER_TEMP}/fixtures"

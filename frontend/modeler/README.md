@@ -8,6 +8,7 @@ Ruby remains authoritative for model parsing, validation, persistence, and APIs.
 ```sh
 npm ci
 npm run test:studio
+npm run test:build
 npm run typecheck
 npm run build
 ```
@@ -42,3 +43,9 @@ bundle exec ruby script/frontend_browser_acceptance --scenario spec/fixtures/fro
 These scenarios require local Chromium and loopback sockets. They cover catalog
 navigation and rendering class, activity, and sequence diagrams using the
 bundled Mermaid and DOMPurify dependencies.
+
+The modeler uses esbuild with four HTML entrypoints. `npm run build:studio`
+rebuilds only Studio and preserves the other bundles. The development server
+uses port 5173 (override with `MXRB_UI_PORT`), proxies `/api` to the Ruby port,
+and reloads the browser after source changes. Temporary development bundles
+are written to `tmp/modeler-dev`; production assets remain reproducible.

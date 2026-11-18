@@ -42,6 +42,7 @@ jobs:
         run: |
           npm ci
           npm run test:studio
+          npm run test:build
           npm run build
 
       - name: Verify committed modeler assets
@@ -150,7 +151,7 @@ jobs:
           node-version: "24"
       - name: Build modeler
         working-directory: frontend/modeler
-        run: npm ci && npm run test:studio && npm run build
+        run: npm ci && npm run test:studio && npm run test:build && npm run build
       - name: Certify catalog and diagrams
         run: |
           bundle exec ruby bin/mxrb generate spec/fixtures/modeler_catalog/project.rb "${RUNNER_TEMP}/catalog.mpr"
