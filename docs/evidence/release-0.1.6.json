@@ -1,0 +1,220 @@
+{
+  "version": "0.1.6",
+  "date": "2026-11-18",
+  "implementation_commit": "0c0472f",
+  "pull_request": "https://github.com/lucamykael/mxrb/pull/264",
+  "native_oracle": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/44357390875",
+    "require_build": true,
+    "pass_count": 8,
+    "equivalent_count": 0,
+    "fail_count": 0,
+    "cases": [
+      {
+        "label": "connector-kit-7.5.0",
+        "version": "7.5.0",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 12695483,
+          "package_sha256": "f05e10bd9d242667d8a981c8ea0ee8560f419ac9b876942b46d3fd0f4709ef77"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 12695729,
+          "package_sha256": "bfd33fc3d86294e2ca75dfe461408cd96cb4344120e49335a6099e8e304dc793"
+        },
+        "report_sha256": "35a1cb37c2eeacbc768bd5f599dd44fae47cc7c90b6fff5834b904a5d564535d"
+      },
+      {
+        "label": "first-medix-9.6.1",
+        "version": "9.6.1.29396",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 11589729,
+          "package_sha256": "aa3df5bbac49bfdfdf6dec50854cdaf037cb89cc02d855a774729933ce5458a5"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 11589727,
+          "package_sha256": "c9a6ad3d54d0a5fb8122bcd696476e67bd621c8f40a7913064c086325e6f7255"
+        },
+        "report_sha256": "00649156ee4ec58b5a4176e821bc080a81361d0d3cabcfae498dfb98e3adaa91"
+      },
+      {
+        "label": "grid-view-6.10.8",
+        "version": "6.10.8",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 1501020,
+          "package_sha256": "864dc1d7a64440e891498f5f4ad09c5dadfbfbd91310e6ca0369df09f2f386f9"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 1501105,
+          "package_sha256": "e1bbdb558c06bb9321cc9836da57fa8cd4e37fd980fa21e30fd43ac95665ff78"
+        },
+        "report_sha256": "d39bb68b0f448f7a36e193a5f023e0b0373fb49ba35ff0dfe605162386d1c1ab"
+      },
+      {
+        "label": "presentation-mendix11",
+        "version": "11.12.1",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 11942559,
+          "package_sha256": "c19a6f1697e0cd08ca666d63572f3d323e9ff7aa66da5c925c3ab09c17140561"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 11942645,
+          "package_sha256": "04276a505e1ab54d788bfd42b7572ae97bfba4552b2f0e3481394337acc9413b"
+        },
+        "report_sha256": "8bc1dd98e5341a47961c8abac6ac399590d94dd8b094c2524b37cb7bd347f016"
+      },
+      {
+        "label": "presentation-mendix7",
+        "version": "7.5.0",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 12695612,
+          "package_sha256": "62a04974cf9d57d689bf42ec60b2b2c047b3796b1335e90857ea92d6e1b79469"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 12695444,
+          "package_sha256": "7a5bd9e8427200d2864262f1f900f674cf1d4103978173b6a014e748c88a4dd7"
+        },
+        "report_sha256": "630a37fb7e0e1ff41c38436d6c5ab9069abdf0e98ac5e96707f7bbfc8f95a644"
+      },
+      {
+        "label": "presentation-mendix9",
+        "version": "9.6.1.29396",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 11589805,
+          "package_sha256": "79e7526eaca8ddc1118d33fd8b0fb581724f1b1549e9e1ad5a2271b202f89476"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 11590234,
+          "package_sha256": "a2a1c945e16a9e37f466e947166e3ea7464b31e3485beaf1a4ead3d7f1440843"
+        },
+        "report_sha256": "99b0656e5f972c7919f70a027891e8e50e1641f165197e6c5288864f54c36bc5"
+      },
+      {
+        "label": "query-api-7.17.0",
+        "version": "7.17.0-rc5",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 9161052,
+          "package_sha256": "e999ee98126d9142c2395d317dc0cb566509a783d750076bfe5c4a56bc649fa0"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 9160551,
+          "package_sha256": "58f27f87691f90c06478750be849e4b60a6395551d7f788089450ce78fd0f03e"
+        },
+        "report_sha256": "9c4443fb7e34c02745f838b1f9657c72344e5f1b1ab5af2384cb1271f335482e"
+      },
+      {
+        "label": "tree-view-5.21.4",
+        "version": "5.21.4",
+        "status": "pass",
+        "new_errors": [],
+        "new_warnings": [],
+        "source": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 1689469,
+          "package_sha256": "62a1bb99272dabd1ccb487afd409aea3779d7a7fdb278c8b85df98e655059d01"
+        },
+        "rebuilt": {
+          "exit_code": 0,
+          "built": true,
+          "package_bytes": 1689528,
+          "package_sha256": "1c6a59fd82bc01918bb47e223c9e12f6cd49efa61f6c2d2c050e96596927fbe4"
+        },
+        "report_sha256": "06cbb1d60dd84583efc89163cb10f361915861f9e44f79f307561ea033f2c112"
+      }
+    ]
+  },
+  "local": {
+    "widget_specs": {
+      "examples": 39,
+      "failures": 0
+    },
+    "java21_specs": {
+      "examples": 4,
+      "failures": 0
+    },
+    "full_suite": {
+      "examples": 3259,
+      "initial_failures": 1,
+      "note": "Initial run selected an older javac; the failing integration passed when rerun with JDK 21. Complete CI result is recorded separately."
+    },
+    "rubocop": {
+      "files": 947,
+      "offenses": 0
+    },
+    "full_unit_comparisons": [
+      "TreeviewDemo 5.21.4",
+      "QueryApiBlogPost 7.17.0-rc5"
+    ],
+    "browser": [
+      {
+        "scenario": "mxrb-project-modeler-catalog",
+        "passed": true,
+        "console_errors": []
+      },
+      {
+        "scenario": "mxrb-uml-diagrams",
+        "passed": true,
+        "console_errors": []
+      },
+      {
+        "scenario": "mxrb-domain-diagram",
+        "passed": true,
+        "console_errors": []
+      }
+    ]
+  },
+  "verification_runs": {
+    "ci": "https://github.com/lucamykael/mxrb/actions/runs/44357390884",
+    "windows_native": "https://github.com/lucamykael/mxrb/actions/runs/44357498187",
+    "dependency_audit": "https://github.com/lucamykael/mxrb/actions/runs/44357390911"
+  }
+}

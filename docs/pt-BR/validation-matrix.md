@@ -167,28 +167,27 @@ endpoints sobrevivem e são removidas quando ficariam pendentes; o fixture com
 
 ## Validação oficial Mendix 5–9
 
-O projeto 6.10 gerou MDA no original e reconstruído. As versões 7.5 e 7.17
-chegaram à compilação Java com os mesmos erros de dependências dos originais.
-O 9.6.1 manteve paridade de 896 diagnósticos. O 5.21 exato depende de WPF e
-Windows; sua paridade foi verificada pelo conversor oficial 6.10 em memória.
+Em 18/11/2026, o workflow Legacy MxBuild oracle gerou pacotes executáveis
+para original e reconstruído em **5.21.4, 6.10.8, 7.5.0, 7.17.0 e 9.6.1**.
+O Mendix 5 usa o MxBuild 5.21.4 exato no Windows, onde WPF está disponível;
+a certificação não depende mais da conversão em memória pelo 6.10.
+O fixture 7.17.0-rc5 usa o MxBuild 7.17.0 final com `--loose-version-check`.
 
-O workflow Legacy MxBuild oracle repete essa verificação no Windows para 6.10.8,
-7.5.0, 7.17.0 e 9.6.1, a partir dos repositórios públicos em commits fixos e com
-arquivos MxBuild de checksum fixo. `script/mxbuild_oracle_inputs` prepara uma
-cópia original e uma reconstruída de cada projeto, e `script/mxbuild_oracle`
-compila as duas: o caso passa quando ambas compilam e a reconstrução não ganha
-erro de consistência; é equivalente quando o original também não compila e a
-reconstrução falha com os mesmos diagnósticos; e falha nos demais casos. Em
-06/11/2026, depois da projeção de campos gravados das #256 e #257, o 6.10.8
-passou e os outros três foram equivalentes. Os mesmos scripts rodam localmente
-os projetos 11.6 privados com o MxBuild de Linux.
+Os projetos e ferramentas estão fixados por revisão e checksum. As bibliotecas
+Java declaradas do QueryApiBlogPost foram restauradas em 16 versões exatas,
+e os recursos Atlas/widgets do Mendix 9 são restaurados sem alterar os documentos.
+`script/mxbuild_oracle_inputs` prepara cópias original e reconstruída;
+`script/mxbuild_oracle --require-build` exige ambos os pacotes, recusa falhas
+equivalentes e registra tamanho e SHA-256. Os oito casos do workflow, incluindo
+as edições de apresentação 7/9/11, passaram. Consulte as
+[evidências da versão 0.1.6](../evidence/release-0.1.6.json).
 
 ## Limite de confiança
 
-A matriz prova os cenários inspecionados, não compatibilidade universal com
-todo metamodelo Mendix. Encodings `.mxunit` desconhecidos são rejeitados em vez
-de adivinhados. A validação exata do 5.21 em Studio Pro/Windows continua sendo
-um limite explícito.
+A matriz prova os cenários inspecionados, sem garantir compatibilidade universal
+com todo metamodelo Mendix. Encodings `.mxunit` desconhecidos são rejeitados.
+A certificação exata do 5.21.4 está automatizada no Windows; o host Linux continua
+sem os componentes WPF necessários para executar essa ferramenta.
 
 ## Certificação de widgets e apresentação
 

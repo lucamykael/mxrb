@@ -109,23 +109,23 @@ Generatoren können Felder auslassen, die sie haben.
 
 ## Offizielle Gates
 
-Sudoku 11.12.1: **0 Fehler** in `mx check`, identische 23 Warnungen,
-1 Deprecation und 6 Empfehlungen; MxBuild erfolgreich. Mendix 6.10 baute
-Original und Rekonstruktion erfolgreich. 7.x und 9.6 zeigten diagnostische
-Parität. Die exakte 5.21-Prüfung bleibt wegen WPF auf Windows/Studio Pro eine
-ausdrückliche MXRB-Einschränkung und gehört nicht zum direkten automatischen
-Gate.
+Sudoku 11.12.1: **0 Fehler** in `mx check`; MxBuild erfolgreich.
+Am 18.11.2026 erzeugte der Windows-Workflow Legacy MxBuild oracle ausführbare
+Pakete für Original und Rekonstruktion in **5.21.4, 6.10.8, 7.5.0, 7.17.0
+und 9.6.1**. Mendix 5 verwendet den exakten MxBuild 5.21.4 mit WPF unter
+Windows; die frühere Einschränkung durch die 6.10-Konvertierung entfällt.
+Das 7.17.0-rc5-Projekt verwendet MxBuild 7.17.0 final mit `--loose-version-check`.
 
-Der Workflow Legacy MxBuild oracle wiederholt die Prüfung für 6.10.8, 7.5.0,
-7.17.0 und 9.6.1 unter Windows, aus den öffentlichen Repositories mit fixierten
-Commits und MxBuild-Archiven mit fixierter Prüfsumme. `script/mxbuild_oracle_inputs`
-erzeugt je Projekt eine gespeicherte und eine rekonstruierte Kopie,
-`script/mxbuild_oracle` baut beide: Ein Fall besteht, wenn beide bauen und die
-Rekonstruktion keinen neuen Konsistenzfehler hat; er ist äquivalent, wenn auch das
-Original nicht baut und die Rekonstruktion mit denselben Diagnosen scheitert; sonst
-schlägt er fehl. Am 06.11.2026, nach der Projektion gespeicherter Felder aus #256
-und #257, bestand 6.10.8, die übrigen drei waren äquivalent. Dieselben Skripte
-prüfen die privaten 11.6-Projekte lokal mit dem Linux-MxBuild.
+Projekt-Commits und MxBuild-Prüfsummen sind fixiert. Fehlende deklarierte
+Java-Bibliotheken sowie Atlas-/Widget-Ressourcen werden in beiden Varianten
+identisch wiederhergestellt. Alle acht Fälle, einschließlich der
+Präsentationsänderungen in 7/9/11, verwenden `--require-build`: äquivalente
+Fehler reichen nicht aus. Paketgrößen, SHA-256 und Workflow-Lauf stehen in den
+[Release-Nachweisen](../evidence/release-0.1.6.json).
+
+Dies bestätigt die geprüften Szenarien, nicht universelle Kompatibilität mit
+jedem Mendix-Metamodell. Unbekannte `.mxunit`-Encodings werden abgelehnt.
+Linux fehlen weiterhin die WPF-Komponenten; die exakte 5.21-Prüfung läuft unter Windows.
 
 Das dedizierte Konstanten-Gate materialisiert String, Boolean, DateTime,
 Decimal und Integer/Long. Zwei MPR → Ruby → MPR-Zyklen bewahren Semantik sowie

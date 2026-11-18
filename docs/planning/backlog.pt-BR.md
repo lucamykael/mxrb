@@ -38,9 +38,10 @@ usam `--require-build`: falhas equivalentes não atendem ao aceite.
 Os [relatórios do lote](../evidence/backlog-2026-11-18.json) distinguem
 comparação estrutural, build nativo, navegador e cada run remoto.
 O [guia de certificação](../guides/certificacao-edicoes.pt-BR.md) documenta
-os comandos, fixtures e recursos necessários. Os casos legados anteriores
-continuam distinguindo `pass` de `equivalent`; equivalência não é certificação
-de pacote executável.
+os comandos, fixtures e recursos necessários. Na continuação para a versão 0.1.6, os cinco casos legados também passaram
+com pacotes positivos, incluindo MxBuild 5.21.4 exato no Windows. Todos os
+oito casos agora exigem `--require-build`; equivalência não atende ao gate.
+Consulte as [evidências da release](../evidence/release-0.1.6.json).
 
 ## Dependências e interfaces
 
