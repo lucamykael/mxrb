@@ -222,58 +222,37 @@ round-trips passed again.
 
 ## Official Mendix 5–9 validation
 
-The other v1 fixtures were also opened by official MxBuild binaries. Original
-and rebuilt projects were tested in separate disposable project directories
-with identical resources:
+On 2026-11-18, the Windows Legacy MxBuild oracle produced executable packages
+for both original and rebuilt projects in all five legacy fixtures:
 
 | Fixture | Official tool | Original vs rebuilt result |
 |---|---|---|
-| FirstMedix App 9.6.1 | MxBuild 9.6.1.29396 | exact diagnostic parity: 884 errors and 12 warnings; both stop on the same missing theme/widget resources |
-| QueryApiBlogPost 7.17.0-rc5 | MxBuild 7.17.0 final with `--loose-version-check` | both pass model consistency and reach Java compilation; both report the same 42 missing-dependency errors |
-| ConnectorKitDemo 7.5.0 | MxBuild 7.5.0 | both pass model consistency and reach Java compilation; both report the same 100 missing-dependency errors |
-| GridViewPlayground 6.10.8 | MxBuild 6.10.8 | **BUILD SUCCEEDED** for both original and rebuilt |
-| TreeviewDemo 5.21.4 | MxBuild 6.10.8 with `--loose-version-check` | exact normalized diagnostic parity: 1 error, 6 warnings and 8 deprecations |
+| TreeviewDemo 5.21.4 | Exact MxBuild 5.21.4 on Windows | **BUILD SUCCEEDED** for both |
+| GridViewPlayground 6.10.8 | MxBuild 6.10.8 | **BUILD SUCCEEDED** for both |
+| ConnectorKitDemo 7.5.0 | MxBuild 7.5.0 | **BUILD SUCCEEDED** for both |
+| QueryApiBlogPost 7.17.0-rc5 | MxBuild 7.17.0 final with `--loose-version-check` | **BUILD SUCCEEDED** for both |
+| FirstMedix App 9.6.1 | MxBuild 9.6.1.29396 | **BUILD SUCCEEDED** for both |
 
-The Legacy MxBuild oracle workflow repeats this check on Windows for the 6.10.8,
-7.5.0, 7.17.0 and 9.6.1 rows, from the public repositories at pinned commits and
-with pinned MxBuild archives. `script/mxbuild_oracle_inputs` prepares a stored and
-a rebuilt copy of each project, and `script/mxbuild_oracle` builds both: a case
-passes when both build and the rebuild adds no consistency error, is equivalent
-when the stored project cannot be built either and the rebuild fails with the same
-diagnostics, and fails otherwise. On 2026-11-06, after the stored-field projection
-of #256 and #257, 6.10.8 passed and the other three were equivalent, as in the
-table. The same scripts run the private 11.6 projects locally with the Linux MxBuild.
+The workflow pins project revisions and tool checksums, restores the declared
+Java dependencies and missing Atlas/widget resources identically in both
+variants, and uses `--require-build` for every case. An equivalent failure is
+rejected. All eight cases passed, including presentation edits in Mendix 7/9/11.
+[Release evidence](../evidence/release-0.1.6.json) records package sizes, SHA-256
+hashes and the workflow run. Package hashes may differ because generated
+metadata is not deterministic.
 
-The rebuilt GridView MDA is 1,501,038 bytes with SHA-256
-`b92646e2a2ce47f8808b9c0624b7c68b3f11f962fefa5be28c5600f0cb628416`.
-MDA archives are not expected to be byte-identical because generated package
-metadata can vary between runs.
-
-This run found one real MXRB regression in the 7.17 fixture: a reference
-implementation microflow was exported without its `Excluded=true` metadata,
-so the rebuilt project activated it and reported six unresolved
-`UserManagement.Account` references. Flow metadata is now first-class Ruby DSL
-and the fixed rebuild reaches the same Java compilation failure as the
-original.
-
-The old 6.x/7.x distributions have an optional NLog configuration that is
-incompatible with modern Mono reflection. Only that logging section was
-disabled in disposable copies; the MxBuild/model/runtime assemblies were not
-changed. MxBuild 5.21.4 cannot be model-validated on this Linux host because it
-loads WPF `PresentationFramework` plugins before reading the MPR. The same
-original and rebuilt 5.21 projects were therefore compared through MxBuild
-6.10.8's official in-memory upgrade. Exact 5.21 validation remains a Windows
-Studio Pro/MxBuild check.
+The exact Mendix 5.21.4 check now runs on Windows with WPF, replacing the prior
+confidence limit based on the 6.10 in-memory converter. The fixture also exposed
+an omitted image-viewer data source in exported Ruby; the exporter now preserves
+it, and both 5.21.4 and 7.17.0 pass full-unit comparisons before native compilation.
 
 ## Confidence boundary
 
-A passing matrix demonstrates lossless behavior for the properties inspected by
-`mxrb compare` on these fixtures, plus official MxBuild compatibility or
-diagnostic parity for Mendix 6, 7, 9 and 11. Mendix 5 has parity through the
-official 6.10 in-memory converter, but still needs an exact Windows-side 5.21
-run. This is not proof of full compatibility with every Mendix metamodel
-version, and unknown `.mxunit` encodings continue to be rejected rather than
-guessed.
+A passing matrix demonstrates lossless behavior for the inspected properties and
+native compilation of these fixtures. It does not prove compatibility with every
+Mendix metamodel version or custom widget. Unknown `.mxunit` encodings remain
+rejected. Linux still lacks the WPF components needed to run MxBuild 5.21.4;
+the exact automated check uses Windows.
 
 Every native unit retains `.mxrb/native_units.json` as its lossless baseline
 and is also expanded into editable `native_unit` hashes in
