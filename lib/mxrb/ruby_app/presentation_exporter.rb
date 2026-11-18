@@ -45,7 +45,7 @@ module Mxrb
       end
 
       def layout_appearance(widgets, document)
-        appearance = document.fetch('Appearance', {})
+        appearance = document.fetch('Appearance', document)
         options = { 'class' => appearance['Class'], 'style' => appearance['Style'] }
                   .reject { |_key, value| value.to_s.empty? }
         return widgets if options.empty?

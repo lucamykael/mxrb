@@ -54,7 +54,7 @@ module Mxrb
       def regions(layout_call)
         array(layout_call['Arguments']).to_h do |argument|
           parameter = (argument['Parameter'] || argument['Placeholder']).to_s.split('.').last
-          [parameter, widgets('Widgets' => argument['Widgets'])]
+          [parameter, widgets(argument)]
         end
       end
     end

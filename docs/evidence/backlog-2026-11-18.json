@@ -1,0 +1,197 @@
+{
+  "date": "2026-11-18",
+  "structural": {
+    "passed": true,
+    "cases": [
+      {
+        "label": "mendix7",
+        "version": "7.5.0",
+        "passed": true,
+        "fixture": {
+          "name": "ConnectorKitDemo.mpr",
+          "sha256": "f6afbea72e73a6ef5f2ae97ff37c2fff10ef0f5c7270646a1cd2f509a8a9d3ec"
+        },
+        "revision": "9eed61f1fb737d189a3b018ac7691c87569053de",
+        "changed_fields": 3,
+        "edit_source": "public Ruby"
+      },
+      {
+        "label": "mendix9",
+        "version": "9.6.1.29396",
+        "passed": true,
+        "fixture": {
+          "name": "FirstMedix App.mpr",
+          "sha256": "96743656641fdebbf82db46c147d666eee5180fc38f2125572594903e9df6b33"
+        },
+        "revision": "8912322e170e5babb4bf77461242ae51b555ca42",
+        "changed_fields": 3,
+        "edit_source": "public Ruby"
+      },
+      {
+        "label": "mendix11",
+        "version": "11.12.1",
+        "passed": true,
+        "fixture": {
+          "name": "Sudoku.mpr",
+          "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+        },
+        "revision": "918af72e43ca8e1d61fb0c32ad13d8da94b944e2",
+        "changed_fields": 4,
+        "edit_source": "public Ruby"
+      }
+    ],
+    "report": "docs/evidence/presentation-edits-2026-11-18.json"
+  },
+  "browser": [
+    {
+      "scenario": "real-sudoku-presentation-edits",
+      "passed": true,
+      "steps": 43,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/sudoku-gate/report.json",
+      "pages": [
+        {
+          "name": "edited-sudoku-home",
+          "snapshot_sha256": "a2b696fbe8e5d0b1a5bb232679a620e236d332b95066c10f32fab377fc399a77",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/sudoku-gate/edited-sudoku-home.png",
+          "screenshot_sha256": "440567d4637f73a5f475bfdb4a56d0b10317796e173ce550bd470e01ceac30d6"
+        },
+        {
+          "name": "edited-sudoku-gameplay",
+          "snapshot_sha256": "a2b696fbe8e5d0b1a5bb232679a620e236d332b95066c10f32fab377fc399a77",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/sudoku-gate/edited-sudoku-gameplay.png",
+          "screenshot_sha256": "440567d4637f73a5f475bfdb4a56d0b10317796e173ce550bd470e01ceac30d6"
+        }
+      ]
+    },
+    {
+      "scenario": "persistent-page-drafts-reload",
+      "passed": true,
+      "steps": 26,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/persistence-gate/report.json",
+      "pages": [
+        {
+          "name": "saved-after-reload",
+          "snapshot_sha256": "fd07a189ef6f695b35b32a6a0e5b7caeebecce657940f2b42629dcd33638224e",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/persistence-gate/saved-after-reload.png",
+          "screenshot_sha256": "47981d344c3209cc19900bd28d56c38ace946e51d65f2cd96fb4c13999efccfc"
+        },
+        {
+          "name": "required-name-feedback",
+          "snapshot_sha256": "496bc924a9add2fa93c649de23fcf256205e9d8735451ad355efef3d7f85b0e5",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/persistence-gate/required-name-feedback.png",
+          "screenshot_sha256": "d60d3faddfa178bbfa2c715e3969adf30fd4c39df66107343de63a1b376e41c7"
+        },
+        {
+          "name": "no-invalid-row-after-reload",
+          "snapshot_sha256": "fd07a189ef6f695b35b32a6a0e5b7caeebecce657940f2b42629dcd33638224e",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/persistence-gate/no-invalid-row-after-reload.png",
+          "screenshot_sha256": "47981d344c3209cc19900bd28d56c38ace946e51d65f2cd96fb4c13999efccfc"
+        }
+      ]
+    },
+    {
+      "scenario": "mxrb-uml-diagrams",
+      "passed": true,
+      "steps": 16,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/uml/report.json",
+      "pages": [
+        {
+          "name": "uml-diagrams",
+          "snapshot_sha256": "308d7ffaf81eff93996b798bed7043103eb7615ed2ce368ae3887e93382c3c65",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/uml/uml-diagrams.png",
+          "screenshot_sha256": "beccf37de0a8299e236546e78bc3ea6c79d378c5887f499af10eb9311a7b8755"
+        }
+      ]
+    },
+    {
+      "scenario": "mxrb-project-modeler-catalog",
+      "passed": true,
+      "steps": 17,
+      "console_errors": [],
+      "report": "tmp/backlog-2026-11-18/catalog/report.json",
+      "pages": [
+        {
+          "name": "project-catalog",
+          "snapshot_sha256": "8c0b77740c70490064a6bbe50ba9f6a3d623865b5eea00f3368b9a2920053006",
+          "screenshot": "/home/mykael/Projects/mxrb/tmp/backlog-2026-11-18/catalog/project-catalog.png",
+          "screenshot_sha256": "8d434e8574e8548e7c9ca68babec8155c2e9e2bb82fa78c2cb1da64aea9e3f55"
+        }
+      ]
+    }
+  ],
+  "ruby_suite": {
+    "examples": 3249,
+    "failures": 0,
+    "lines": {
+      "covered": 52371,
+      "total": 52371
+    },
+    "branches": {
+      "covered": 23079,
+      "total": 23079
+    },
+    "jdk": 21,
+    "seed": 13453
+  },
+  "additional_gate_tests": {
+    "examples": 15,
+    "failures": 0
+  },
+  "modeler": {
+    "studio_tests": 28,
+    "build_passed": true
+  },
+  "native_11": {
+    "tool": "mx check 11.12.1",
+    "source_errors": 0,
+    "rebuilt_errors": 0,
+    "source_log_sha256": "87b1e2e6506a7c6b01f99d055b3ae76f5bd150c5775e42f6da49479fef1c0fe2",
+    "rebuilt_log_sha256": "87b1e2e6506a7c6b01f99d055b3ae76f5bd150c5775e42f6da49479fef1c0fe2"
+  },
+  "legacy_java": {
+    "version": "7.5.0",
+    "jdk": 8,
+    "source_files": 87,
+    "compile_exit_code": 0,
+    "dependencies_verified": 20,
+    "manifest": "spec/fixtures/presentation_edits/connector-dependencies.json",
+    "manifest_sha256": "53fed90cdbfed785160e675f9c222512afbaa5a05cbe6994420377d0611a189d",
+    "log_sha256": "dece862a32d4e989fd23df958ea691a7e58fa3157857498e3049c7e8b6c37239",
+    "native_build_certified": false
+  },
+  "external_pending": {
+    "MXRB-006": {
+      "windows_run_for_current_changes": "not_run",
+      "prior_run": 43918082610,
+      "mendix9_blockers": [
+        "Missing Atlas design properties/theme assets",
+        "Missing AnyChart and Feedback widgets",
+        "Layout grid column weights invalid in the original project"
+      ]
+    },
+    "MXRB-007": {
+      "picomatch_latest": "4.0.7",
+      "audit_high_entries": 5,
+      "advisory": "https://github.com/advisories/GHSA-fc5q-39xc-vjpf",
+      "upstream_fix_available": false,
+      "dependabot_and_audit_workflow": "prepared, not published"
+    },
+    "MXRB-010": {
+      "runner_measurements": "not_available",
+      "numeric_ci_budget": "not_created",
+      "calibration_and_strict_verify_workflow": "prepared, not published",
+      "enforced_in_main_ci": false
+    }
+  },
+  "documentation_tests": {
+    "examples": 6,
+    "failures": 0
+  },
+  "lint": {
+    "files": 947,
+    "offenses": 0
+  }
+}

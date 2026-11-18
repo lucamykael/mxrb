@@ -13,6 +13,7 @@
 - [Microflows organizados por métodos](method-oriented-flows.md)
 - [Convenções](conventions.md)
 - [Roadmap Ruby-first](ruby-first-roadmap.md)
+- [Backlog e critérios de aceite](../planning/backlog.pt-BR.md)
 - [Matriz de validação](validation-matrix.md)
 - [Compilador nativo e Runtime](compiler.md)
 - [Runtime Ruby sem Java e ambientes](runtime-ruby.md)

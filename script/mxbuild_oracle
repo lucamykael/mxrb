@@ -14,6 +14,7 @@
 #   script/mxbuild_oracle INPUTS --mxbuild PATH [--java-home DIR] [--label LABEL] [--timeout MINUTES]
 
 require 'English'
+require 'digest'
 require 'json'
 require 'optparse'
 require 'timeout'
@@ -21,7 +22,7 @@ require 'timeout'
 # Runs MxBuild on both variants of each case and compares the outcomes.
 module MxbuildOracle
   CODE = /\b(C[EW]\d{3,4})\b/
-  DIAGNOSTIC = /error|exception|fail/i
+  DIAGNOSTIC = /error|exception|fail|timed out|\bCE\d{3,4}\b/i
   STATUSES = %w[pass equivalent fail].freeze
 
   module_function
@@ -31,7 +32,11 @@ module MxbuildOracle
     report = summary(results).merge(mxbuild: options.fetch(:mxbuild), cases: results)
     File.write(File.join(inputs, "oracle-#{options[:label] || 'all'}.json"), JSON.pretty_generate(report))
     print_report(report)
-    exit(report.fetch(:fail).zero? ? 0 : 1)
+    exit(passed?(report, require_build: options.fetch(:require_build, false)) ? 0 : 1)
+  end
+
+  def passed?(report, require_build: false)
+    report.fetch(:fail).zero? && (!require_build || report.fetch(:equivalent).zero?)
   end
 
   # Prints the report, and on GitHub Actions also one annotation per case, because the
@@ -67,9 +72,7 @@ module MxbuildOracle
     selected
   end
 
-  def summary(results)
-    STATUSES.to_h { |status| [status.to_sym, results.count { _1.fetch(:status) == status }] }
-  end
+  def summary(results) = STATUSES.to_h { |status| [status.to_sym, results.count { _1.fetch(:status) == status }] }
 
   def verdict(inputs, test_case, options)
     source, rebuilt = %w[source rebuilt].map { build(inputs, test_case, _1, options) }
@@ -82,17 +85,25 @@ module MxbuildOracle
   def status(source, rebuilt, new_errors)
     if source.fetch(:built)
       rebuilt.fetch(:built) && new_errors.empty? ? 'pass' : 'fail'
-    elsif !rebuilt.fetch(:built) && rebuilt.fetch(:diagnostics) == source.fetch(:diagnostics)
+    elsif equivalent_failure?(source, rebuilt, new_errors)
       'equivalent'
     else
       'fail'
     end
   end
 
+  def equivalent_failure?(source, rebuilt, new_errors)
+    !rebuilt.fetch(:built) && new_errors.empty? &&
+      source.fetch(:exit_code).positive? && source.fetch(:exit_code) != 124 &&
+      rebuilt.fetch(:exit_code) == source.fetch(:exit_code) &&
+      !source.fetch(:diagnostics).empty? && rebuilt.fetch(:diagnostics) == source.fetch(:diagnostics)
+  end
+
   def build(inputs, test_case, variant, options)
     directory = File.join(inputs, test_case.fetch(variant))
     log = File.expand_path("../mxbuild-#{variant}.log", directory)
     package = File.expand_path("../#{variant}.mda", directory)
+    File.delete(package) if File.exist?(package)
     command = [options.fetch(:mxbuild), '--target=package', '--loose-version-check', '-o', package,
                *java_options(options[:java_home]), File.join(directory, test_case.fetch('mpr'))]
     status = execute(command, log, options.fetch(:timeout) * 60)
@@ -103,8 +114,14 @@ module MxbuildOracle
   def outcome(status, package, log, directory)
     paths = [directory, directory.tr('/', '\\')].uniq
     lines = File.readlines(log, chomp: true).map { |line| paths.reduce(line.strip) { _1.gsub(_2, '<project>') } }
-    { exit_code: status, built: status.zero? && File.file?(package), log:,
-      errors: codes(lines, 'CE'), warnings: codes(lines, 'CW'), diagnostics: lines.grep(DIAGNOSTIC).uniq.sort }
+    { exit_code: status, log:, errors: codes(lines, 'CE'), warnings: codes(lines, 'CW'),
+      diagnostics: lines.grep(DIAGNOSTIC).uniq.sort }.merge(package_details(package, status))
+  end
+
+  def package_details(package, status)
+    bytes = File.file?(package) ? File.size(package) : 0
+    { built: status.zero? && bytes.positive?, package_bytes: bytes,
+      package_sha256: bytes.positive? ? Digest::SHA256.file(package).hexdigest : nil }
   end
 
   def java_options(home)
@@ -125,9 +142,7 @@ module MxbuildOracle
   end
 
   # The distinct diagnostic lines of one severity, without ordering noise.
-  def codes(lines, prefix)
-    lines.select { |line| line[CODE, 1]&.start_with?(prefix) }.uniq.sort
-  end
+  def codes(lines, prefix) = lines.select { |line| line[CODE, 1]&.start_with?(prefix) }.uniq.sort
 end
 
 if $PROGRAM_NAME == __FILE__
@@ -137,6 +152,7 @@ if $PROGRAM_NAME == __FILE__
     parser.on('--java-home DIR') { options[:java_home] = _1 }
     parser.on('--label LABEL') { options[:label] = _1 }
     parser.on('--timeout MINUTES', Integer) { options[:timeout] = _1 }
+    parser.on('--require-build', 'Require successful builds') { options[:require_build] = true }
   end.parse!
   unless ARGV.one? && options[:mxbuild]
     abort 'usage: mxbuild_oracle INPUTS --mxbuild PATH [--java-home DIR] [--label LABEL] [--timeout MINUTES]'

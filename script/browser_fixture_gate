@@ -1,0 +1,57 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'optparse'
+require 'timeout'
+$LOAD_PATH.unshift(File.expand_path('../lib', __dir__))
+require 'mxrb'
+load File.expand_path('frontend_browser_acceptance', __dir__)
+
+# Runs a local fixture and its Chromium scenario in one process, with cleanup.
+module BrowserFixtureGate
+  module_function
+
+  def run(kind:, source:, scenario:, output:) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
+    config = JSON.parse(File.read(scenario))
+    unless config['authentication'] == false
+      raise ArgumentError, 'fixture scenarios must explicitly disable authentication'
+    end
+
+    klass = { 'app' => Mxrb::RubyApp::Server, 'modeler' => Mxrb::Uml::Server }.fetch(kind)
+    server = klass.new(source, port: 0)
+    ready = Queue.new
+    thread = Thread.new do
+      server.start { ready << _1.binder.ios.first.local_address.ip_port }
+    rescue StandardError => e
+      ready << e
+    end
+    port = Timeout.timeout(30) { ready.pop }
+    raise port if port.is_a?(Exception)
+
+    report = MxrbFrontendBrowserAcceptance::Runner.new(
+      config:, base_url: "http://127.0.0.1:#{port}", username: '', password: '', output_dir: output
+    ).run
+    FileUtils.mkdir_p(output)
+    File.write(File.join(output, 'report.json'), JSON.pretty_generate(report))
+    report
+  ensure
+    server&.shutdown
+    thread&.join(10)
+  end
+
+  def cli(argv) # rubocop:disable Metrics/AbcSize
+    options = {}
+    OptionParser.new do |parser|
+      parser.banner = 'Usage: script/browser_fixture_gate --kind app|modeler --source PATH --scenario FILE --output DIR'
+      %i[kind source scenario output].each { |key| parser.on("--#{key} VALUE") { options[key] = _1 } }
+    end.parse!(argv)
+    raise ArgumentError, 'all options are required' unless options.keys.sort == %i[kind output scenario source]
+    raise ArgumentError, 'unexpected positional arguments' unless argv.empty?
+
+    report = run(**options)
+    puts JSON.pretty_generate(report.slice(:passed, :scenario, :error, :console_errors))
+    report.fetch(:passed) ? 0 : 1
+  end
+end
+
+exit BrowserFixtureGate.cli(ARGV) if $PROGRAM_NAME == __FILE__

@@ -1,0 +1,28 @@
+{
+  "name": "mxrb-uml-diagrams",
+  "authentication": false,
+  "viewport": { "width": 1440, "height": 1000 },
+  "pages": [{
+    "name": "uml-diagrams",
+    "path": "/",
+    "steps": [
+      { "wait_for_text": "MXRB UML" },
+      { "wait_for_selector": "#diagram svg" },
+      { "wait_for_absence": "[role='alert']" },
+      { "click_selector": "button[data-kind='activity']" },
+      { "click_selector": "#render" },
+      { "wait_for_selector": "#diagram[aria-busy='false'] svg" },
+      { "wait_for_absence": "[role='alert']" },
+      { "click_selector": "button[data-kind='sequence']" },
+      { "click_selector": "#render" },
+      { "wait_for_selector": "#diagram[aria-busy='false'] svg" },
+      { "wait_for_absence": "[role='alert']" },
+      { "click_selector": "button[data-kind='class']" },
+      { "click_selector": "#render" },
+      { "wait_for_selector": "#diagram[aria-busy='false'] svg" },
+      { "wait_for_text": "Sales.Customer" },
+      { "wait_for_absence": "[role='alert']" }
+    ],
+    "selectors": [".uml-app", "#diagram svg", ".uml-source"]
+  }]
+}

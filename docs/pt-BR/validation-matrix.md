@@ -305,7 +305,10 @@ mediana foi 9,6308 s no total: validação 0,7596 s, índice frio 0,7839 s,
 índice quente 0,0090 s, leitura somente leitura 0,8171 s, exportação 3,9405 s,
 geração 2,1941 s e comparação 1,1322 s. O cache quente teve speedup mediano de
 87,1×. A medição antiga de 6,8463 s não é um baseline comparável, pois usava
-outra composição de etapas e não registrava ambiente/budget; automatizar um
-budget versionado continua pendente. O fuzzing
+outra composição de etapas e não registrava ambiente/budget. Em 17 de novembro,
+o [budget versionado](../guides/benchmark-budget.pt-BR.md) foi implementado
+com identidade do modelo/assets/ambiente e três amostras: calibração local de
+25,651754 s e verificação independente de 27,512983 s, aprovada. O CI coleta
+amostras para calibrar limites próprios do runner. O fuzzing
 determinístico cobre 250 documentos BSON aninhados e 50 arquivos `.mxunit`
 atômicos, inclusive valores binários.

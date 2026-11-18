@@ -1,0 +1,18 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /frontend/modeler
+    schedule:
+      interval: daily
+    open-pull-requests-limit: 5
+    groups:
+      vite-toolchain:
+        patterns:
+          - vite
+          - "@vitejs/*"
+          - tinyglobby
+          - fdir
+          - picomatch
+        update-types:
+          - patch
+          - minor

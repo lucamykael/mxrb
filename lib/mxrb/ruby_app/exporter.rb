@@ -127,8 +127,8 @@ module Mxrb
 
       private
 
-      # Shared presentation always emits typed Forms declarations. Its decoding
-      # fragments are intermediate values, not dependencies of the exported app.
+      # Shared presentation emits typed Forms or inline legacy declarations.
+      # Decoding fragments are intermediate values, not exported dependencies.
       def with_presentation_fragments
         previous = @native_fragment_store
         Dir.mktmpdir('mxrb-presentation-fragments-') do |directory|

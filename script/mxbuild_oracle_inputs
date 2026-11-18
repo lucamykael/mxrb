@@ -21,19 +21,36 @@ module MxbuildOracleInputs
   module_function
 
   def generate(output, specs)
+    output = File.expand_path(output)
     raise ArgumentError, 'output already exists' if File.exist?(output)
-    raise ArgumentError, 'give at least one LABEL=MPR' if specs.empty?
 
+    inputs = parse_inputs(specs)
     FileUtils.mkdir_p(output)
-    cases = specs.map { |spec| prepare(output, *spec.split('=', 2)) }
+    cases = inputs.map { prepare(output, *_1) }
     File.write(File.join(output, 'cases.json'), JSON.pretty_generate(cases))
     puts JSON.generate(output:, cases: cases.map { _1.fetch(:label) })
   end
 
-  def prepare(output, label, mpr)
-    raise ArgumentError, "invalid label: #{label}" unless label.to_s.match?(/\A[A-Za-z0-9._-]+\z/)
-    raise ArgumentError, "#{mpr}: MPR not found" unless mpr && File.file?(mpr)
+  def parse_inputs(specs)
+    raise ArgumentError, 'give at least one LABEL=MPR' if specs.empty?
 
+    inputs = specs.map { _1.split('=', 2) }
+    inputs.each { validate_input(*_1) }
+    labels = inputs.map { _1.first.downcase }
+    raise ArgumentError, 'duplicate label' unless labels.uniq.size == labels.size
+
+    inputs
+  end
+
+  def validate_input(label, mpr = nil)
+    unless label.to_s.match?(/\A[A-Za-z0-9._-]+\z/) && !%w[. ..].include?(label)
+      raise ArgumentError, "invalid label: #{label}"
+    end
+    raise ArgumentError, "#{mpr}: MPR not found" unless mpr && File.file?(mpr)
+  end
+
+  def prepare(output, label, mpr)
+    validate_input(label, mpr)
     version = Mxrb.open(mpr, &:mendix_version)
     source = copy_project(mpr, File.join(output, label, 'source'))
     rebuilt = copy_project(mpr, File.join(output, label, 'rebuilt'))

@@ -1,0 +1,66 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'digest'
+require 'fileutils'
+require 'json'
+require 'tempfile'
+
+# Restores the fixture's declared libraries identically before either variant is built.
+module OracleDependencies
+  module_function
+
+  def validate(manifest)
+    raise ArgumentError, 'unsupported dependency manifest' unless manifest.fetch('schema_version') == 1
+
+    entries = manifest.fetch('artifacts')
+    entries.each { validate_entry(_1) }
+    names = entries.map { _1.fetch('file').downcase }
+    raise ArgumentError, 'duplicate dependency filename' unless names.uniq.size == names.size
+
+    entries
+  end
+
+  def validate_entry(entry)
+    return if entry.fetch('file').match?(/\A[\w.-]+\.jar\z/) &&
+              entry.fetch('url').match?(%r{\Ahttps://repo\.maven\.apache\.org/maven2/[\w./-]+\.jar\z}) &&
+              entry.fetch('sha256').match?(/\A[0-9a-f]{64}\z/)
+
+    raise ArgumentError, 'invalid locked dependency'
+  end
+
+  def install(manifest, directory)
+    entries = validate(manifest)
+    FileUtils.mkdir_p(directory)
+    entries.each { install_one(_1, directory) }
+    entries.size
+  end
+
+  def install_one(entry, directory)
+    destination = File.join(directory, entry.fetch('file'))
+    return verify(destination, entry) if File.exist?(destination)
+
+    Tempfile.create(['dependency-', '.jar'], directory) do |temporary|
+      download(entry.fetch('url'), temporary.path)
+      verify(temporary.path, entry)
+      FileUtils.mv(temporary.path, destination)
+    end
+  end
+
+  def download(url, path)
+    system('curl', '--fail', '--silent', '--show-error', '--location', '--proto', '=https', '--retry', '2',
+           '--max-time', '120', '--output', path, url, exception: true)
+  end
+
+  def verify(path, entry)
+    return if Digest::SHA256.file(path).hexdigest == entry.fetch('sha256')
+
+    raise ArgumentError, "dependency checksum mismatch: #{entry.fetch('file')}"
+  end
+end
+
+if $PROGRAM_NAME == __FILE__
+  abort 'Usage: script/prepare_oracle_dependencies MANIFEST.json USERLIB_DIR' unless ARGV.size == 2
+  count = OracleDependencies.install(JSON.parse(File.read(ARGV[0])), ARGV[1])
+  puts JSON.generate(verified_dependencies: count)
+end

@@ -85,6 +85,17 @@ RSpec.describe Mxrb::RubyApp, 'edge contracts' do
     expect(described_class.restore_runtime_project(manifest, '/tmp/output.mpr')).to be_nil
   end
 
+  it 'preserves the output environment when loading the compilation manifest fails' do
+    previous = ENV['MXRB_OUTPUT_PATH']
+    ENV['MXRB_OUTPUT_PATH'] = '/tmp/outer-build.mpr'
+    allow(Mxrb::RubyApp::Manifest).to receive(:load).with('/missing-app').and_raise(IOError, 'missing manifest')
+
+    expect { described_class.compile('/missing-app') }.to raise_error(IOError, 'missing manifest')
+    expect(ENV['MXRB_OUTPUT_PATH']).to eq('/tmp/outer-build.mpr')
+  ensure
+    ENV['MXRB_OUTPUT_PATH'] = previous
+  end
+
   it 'copies runtime MPR contents before synchronizing a compiled application' do
     Dir.mktmpdir('mxrb-runtime-copy-') do |root|
       runtime = File.join(root, 'runtime', 'Base.mpr')

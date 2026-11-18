@@ -228,7 +228,11 @@ Nach der Korrektur der erforderlichen `mprcontents`-Kopie für v2-MPRs lief
 9,6308 s; der warme semantische Cache war im Median 87,1-mal schneller als der
 kalte. Das frühere Ergebnis von 6,8463 s ist wegen einer anderen
 Schrittzusammensetzung und fehlender Umgebungs-/Budgetdaten kein vergleichbarer
-Baseline; ein versioniertes Performance-Budget bleibt offen.
+Baseline. Seit dem 17. November ist das [versionierte Budget](../guides/benchmark-budget.pt-BR.md)
+(portugiesische Anleitung) mit Modell-, Asset- und Umgebungsidentität sowie
+drei Messungen implementiert: lokale Kalibrierung mit 25,651754 s und
+unabhängige erfolgreiche Prüfung mit 27,512983 s. CI sammelt Messwerte
+für eigene Grenzwerte des Runners.
 Deterministisches Fuzzing deckt 250 BSON-Dokumente und 50 atomare
 `.mxunit`-Dateien einschließlich Binärwerten ab.
 

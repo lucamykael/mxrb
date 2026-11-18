@@ -1,0 +1,226 @@
+{
+  "date": "2026-11-17",
+  "structural_passed": true,
+  "cases": [
+    {
+      "label": "mendix7",
+      "passed": true,
+      "version": "7.5.0",
+      "mpr": "ConnectorKitDemo.mpr",
+      "source": "mendix7/source",
+      "rebuilt": "mendix7/rebuilt",
+      "fixture": {
+        "name": "ConnectorKitDemo.mpr",
+        "sha256": "f6afbea72e73a6ef5f2ae97ff37c2fff10ef0f5c7270646a1cd2f509a8a9d3ec"
+      },
+      "repository": "https://github.com/ako/ConnectorKitDemo",
+      "revision": "9eed61f1fb737d189a3b018ac7691c87569053de",
+      "rebuilt_from": "mendix_sidecar",
+      "changes": [
+        {
+          "unit": "ConnectorKitDemoTests.Homepage",
+          "kind": "page",
+          "field": [
+            "Title",
+            "Items",
+            1,
+            "Text"
+          ],
+          "before": "Homepage",
+          "after": "MXRB certified page 7"
+        },
+        {
+          "unit": "NavigationLayouts.Sidebar_Full_Responsive",
+          "kind": "layout",
+          "field": [
+            "Class"
+          ],
+          "before": "layout-sidebar-responsive",
+          "after": "layout-sidebar-responsive mxrb-certified-layout-7"
+        },
+        {
+          "unit": "UnitTesting.Readme",
+          "kind": "snippet",
+          "field": [
+            "Widget",
+            "Caption",
+            "Items",
+            1,
+            "Text"
+          ],
+          "before": "Readme\r\n==============\r\n\r\nConfiguration\r\n-------------------------------------\r\nDo not modify this module, instead\r\n1. Create a new custom module (e.g. UnitTests)\r\n2. Download the CommunityCommons module from the App Store, when you don't already have it available in your project.\r\n3. Call 'UnitTestOverview' microflow, which calls the java action looking for available tests and opens the overview page.\r\n4. You can also choose to copy the snippet UnitTestOverview to a (new) page the new custom module\r\nMake sure the java action 'FindAllUnitTests' is called before the new page with the snippet is opened. The java action checks the model for 'unit test' microflows/ java actions. \r\n5. Take a look at the examples in the 'Example Tests' folder. Use these examples as a pointer to create your own unit tests.\r\n6. Your custom unit tests need to be prefixed with case-insensitive 'Test_' or 'UT_' in order to be picked up automatically by this unit test module.\r\n\r\n",
+          "after": "MXRB certified snippet 7"
+        }
+      ],
+      "differences": [
+        "modules.ConnectorKitDemoTests.pages.Homepage.document.Title.Items.[1].Text: \"Homepage\" != \"MXRB certified page 7\"",
+        "modules.ConnectorKitDemoTests.pages.Homepage.title: \"Homepage\" != \"MXRB certified page 7\"",
+        "modules.NavigationLayouts.presentation_documents.Sidebar_Full_Responsive.document.Class: \"layout-sidebar-responsive\" != \"layout-sidebar-responsive mxrb-certified-layout-7\"",
+        "modules.UnitTesting.presentation_documents.Readme.document.Widget.Caption.Items.[1].Text: \"Readme\\r\\n==============\\r\\n\\r\\nConfiguration\\r\\n-------------------------------------\\r\\nDo not modify this module, instead\\r\\n1. Create a new custom module (e.g. UnitTests)\\r\\n2. Download the CommunityCommons module from the App Store, when you don't already have it available in your project.\\r\\n3. Call 'UnitTestOverview' microflow, which calls the java action looking for available tests and opens the overview page.\\r\\n4. You can also choose to copy the snippet UnitTestOverview to a (new) page the new custom module\\r\\nMake sure the java action 'FindAllUnitTests' is called before the new page with the snippet is opened. The java action checks the model for 'unit test' microflows/ java actions. \\r\\n5. Take a look at the examples in the 'Example Tests' folder. Use these examples as a pointer to create your own unit tests.\\r\\n6. Your custom unit tests need to be prefixed with case-insensitive 'Test_' or 'UT_' in order to be picked up automatically by this unit test module.\\r\\n\\r\\n\" != \"MXRB certified snippet 7\""
+      ],
+      "native_oracle": "pending_windows"
+    },
+    {
+      "label": "mendix9",
+      "passed": true,
+      "version": "9.6.1.29396",
+      "mpr": "FirstMedix App.mpr",
+      "source": "mendix9/source",
+      "rebuilt": "mendix9/rebuilt",
+      "fixture": {
+        "name": "FirstMedix App.mpr",
+        "sha256": "96743656641fdebbf82db46c147d666eee5180fc38f2125572594903e9df6b33"
+      },
+      "repository": "https://github.com/bhataparnak/MendixApp",
+      "revision": "8912322e170e5babb4bf77461242ae51b555ca42",
+      "rebuilt_from": "mendix_sidecar",
+      "changes": [
+        {
+          "unit": "MyFirstModule.Home_Web",
+          "kind": "page",
+          "field": [
+            "Title",
+            "Items",
+            1,
+            "Text"
+          ],
+          "before": "Homepage",
+          "after": "MXRB certified page 9"
+        },
+        {
+          "unit": "Atlas_Core.Atlas_Default",
+          "kind": "layout",
+          "field": [
+            "Appearance",
+            "Class"
+          ],
+          "before": "layout-atlas layout-atlas-responsive-default",
+          "after": "layout-atlas layout-atlas-responsive-default mxrb-certified-layout-9"
+        },
+        {
+          "unit": "DataWidgets._WidgetsExporterSnippet",
+          "kind": "snippet",
+          "field": [
+            "Content",
+            "Template",
+            "Items",
+            1,
+            "Text"
+          ],
+          "before": "{1}",
+          "after": "MXRB certified snippet 9 {1}"
+        }
+      ],
+      "differences": [
+        "modules.Atlas_Core.presentation_documents.Atlas_Default.document.Appearance.Class: \"layout-atlas layout-atlas-responsive-default\" != \"layout-atlas layout-atlas-responsive-default mxrb-certified-layout-9\"",
+        "modules.DataWidgets.presentation_documents._WidgetsExporterSnippet.document.Widgets.gallery1.Object.Properties.[3].Value.Widgets.text1.Content.Template.Items.[1].Text: \"{1}\" != \"MXRB certified snippet 9 {1}\"",
+        "modules.MyFirstModule.pages.Home_Web.document.Title.Items.[1].Text: \"Homepage\" != \"MXRB certified page 9\"",
+        "modules.MyFirstModule.pages.Home_Web.title: \"Homepage\" != \"MXRB certified page 9\""
+      ],
+      "native_oracle": "pending_windows"
+    },
+    {
+      "label": "mendix11",
+      "passed": true,
+      "version": "11.12.1",
+      "mpr": "Sudoku.mpr",
+      "source": "mendix11/source",
+      "rebuilt": "mendix11/rebuilt",
+      "fixture": {
+        "name": "Sudoku.mpr",
+        "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+      },
+      "repository": "https://github.com/ako/mxcli-sudoku",
+      "revision": "918af72e43ca8e1d61fb0c32ad13d8da94b944e2",
+      "rebuilt_from": "mendix_sidecar",
+      "changes": [
+        {
+          "unit": "Sudoku.Home",
+          "kind": "page",
+          "field": [
+            "Content",
+            "Template",
+            "Items",
+            1,
+            "Text"
+          ],
+          "before": "Sudoku",
+          "after": "MXRB certified Sudoku"
+        },
+        {
+          "unit": "Atlas_Core.Atlas_Default",
+          "kind": "layout",
+          "field": [
+            "Appearance",
+            "Class"
+          ],
+          "before": "layout-atlas layout-atlas-responsive-default",
+          "after": "layout-atlas layout-atlas-responsive-default mxrb-certified-layout-11"
+        },
+        {
+          "unit": "Administration.ReadMe",
+          "kind": "snippet",
+          "field": [
+            "Content",
+            "Template",
+            "Items",
+            1,
+            "Text"
+          ],
+          "before": "This module contains administration functionalities to manage local accounts and to see app statistics like runtime information, sessions and scheduled events.",
+          "after": "MXRB certified snippet 11"
+        },
+        {
+          "unit": "Administration.ReadMe",
+          "kind": "snippet",
+          "field": [
+            "Content",
+            "Template",
+            "Items",
+            2,
+            "Text"
+          ],
+          "before": "This module contains administration functionalities to manage local accounts and to see app statistics like runtime information, sessions and scheduled events.",
+          "after": "MXRB certified snippet 11"
+        }
+      ],
+      "differences": [
+        "modules.Administration.presentation_documents.ReadMe.document.Widgets.text1.Content.Template.Items.[1].Text: \"This module contains administration functionalities to manage local accounts and to see app statistics like runtime information, sessions and scheduled events.\" != \"MXRB certified snippet 11\"",
+        "modules.Administration.presentation_documents.ReadMe.document.Widgets.text1.Content.Template.Items.[2].Text: \"This module contains administration functionalities to manage local accounts and to see app statistics like runtime information, sessions and scheduled events.\" != \"MXRB certified snippet 11\"",
+        "modules.Atlas_Core.presentation_documents.Atlas_Default.document.Appearance.Class: \"layout-atlas layout-atlas-responsive-default\" != \"layout-atlas layout-atlas-responsive-default mxrb-certified-layout-11\"",
+        "modules.Sudoku.pages.Home.document.FormCall.Arguments.[1].Widgets.conditionalVisibilityWidget1.Widgets.sdHomeShell.Widgets.sdHero.Widgets.sdHeroTitle.Content.Template.Items.[1].Text: \"Sudoku\" != \"MXRB certified Sudoku\"",
+        "modules.Sudoku.pages.Home.widgets.conditionalVisibilityWidget1.children.sdHomeShell.children.sdHero.children.sdHeroTitle.options.caption: \"Sudoku\" != \"MXRB certified Sudoku\""
+      ],
+      "native_oracle": "mx_check_11.12.1"
+    }
+  ],
+  "browser": {
+    "passed": true,
+    "scenario": "real-sudoku-presentation-edits",
+    "steps": 7,
+    "console_errors": [],
+    "screenshot": "tmp/presentation-edits-browser/edited-sudoku-home.png",
+    "screenshot_sha256": "440567d4637f73a5f475bfdb4a56d0b10317796e173ce550bd470e01ceac30d6",
+    "snapshot_sha256": "a2b696fbe8e5d0b1a5bb232679a620e236d332b95066c10f32fab377fc399a77"
+  },
+  "native_11": {
+    "source": {
+      "serialization_version": 1,
+      "errors": [],
+      "warnings": [],
+      "deprecations": [],
+      "total-problems": 0
+    },
+    "rebuilt": {
+      "serialization_version": 1,
+      "errors": [],
+      "warnings": [],
+      "deprecations": [],
+      "total-problems": 0
+    }
+  },
+  "limitations": [
+    "Mendix 7 layout/snippet edits use Ruby sidecar source; public singular Widget projection remains incomplete.",
+    "Windows MxBuild 7/9 on the newly edited projects has not run. The workflow is prepared."
+  ]
+}

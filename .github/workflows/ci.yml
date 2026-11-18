@@ -31,10 +31,17 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/modeler/package-lock.json
 
+      - name: Set up Java for the action sidecar tests
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
       - name: Build the React TypeScript modeler UI
         working-directory: frontend/modeler
         run: |
           npm ci
+          npm run test:studio
           npm run build
 
       - name: Verify committed modeler assets
@@ -87,6 +94,17 @@ jobs:
       - name: Run gradual Ruby quality gate
         run: bundle exec rubocop
 
+      - name: Measure the pinned pipeline for runner-specific budget calibration
+        env:
+          MXRB_BENCHMARK_MPR: /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr
+        run: bundle exec ruby script/benchmark --runs 3 > "${RUNNER_TEMP}/benchmark.json"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-benchmark
+          path: ${{ runner.temp }}/benchmark.json
+          retention-days: 14
+
       - name: Validate the portable Ruby application projection
         run: bundle exec ruby script/validate_ruby_app /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr
 
@@ -116,6 +134,60 @@ jobs:
           mxrb init InstalledGemSmoke --mode ruby
           test -f InstalledGemSmoke/.mxrb/ruby-app.json
           test -f InstalledGemSmoke/frontend/src/app/App.tsx
+
+  browser:
+    name: Chromium diagrams and presentation behavior
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "4.0"
+          bundler-cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Build modeler
+        working-directory: frontend/modeler
+        run: npm ci && npm run test:studio && npm run build
+      - name: Certify catalog and diagrams
+        run: |
+          bundle exec ruby bin/mxrb generate spec/fixtures/modeler_catalog/project.rb "${RUNNER_TEMP}/catalog.mpr"
+          for scenario in modeler_catalog uml_diagrams; do
+            bundle exec ruby script/browser_fixture_gate --kind modeler --source "${RUNNER_TEMP}/catalog.mpr" \
+              --scenario "spec/fixtures/frontend_browser/${scenario}_flow.json" --output "tmp/browser-ci/$scenario"
+          done
+      - name: Prepare the edited pinned Sudoku fixture
+        run: |
+          mkdir -p "${RUNNER_TEMP}/fixtures"
+          git clone --quiet https://github.com/ako/mxcli-sudoku.git "${RUNNER_TEMP}/fixtures/sudoku"
+          git -C "${RUNNER_TEMP}/fixtures/sudoku" checkout --quiet 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
+          bundle exec ruby script/certify_presentation_edits --plan spec/fixtures/presentation_edits/cases.json \
+            --fixtures "${RUNNER_TEMP}/fixtures" --label mendix11 --output "${RUNNER_TEMP}/edits"
+      - name: Certify edited Sudoku gameplay
+        run: |
+          app="${RUNNER_TEMP}/edits/mendix11/ruby"
+          npm --prefix "$app/frontend" ci
+          npm --prefix "$app/frontend" run build
+          bundle exec ruby script/browser_fixture_gate --kind app --source "$app" \
+            --scenario spec/fixtures/frontend_browser/presentation_edits_sudoku_flow.json --output tmp/browser-ci/sudoku
+      - name: Certify persistence and visible validation errors from an empty database
+        env:
+          MXRB_DATAGRID_PACKAGE: ${{ runner.temp }}/fixtures/sudoku/Sudoku/widgets/com.mendix.widget.web.Datagrid.mpk
+        run: |
+          bundle exec ruby bin/mxrb generate spec/fixtures/persistent_page_drafts/project.rb "${RUNNER_TEMP}/drafts/Drafts.mpr"
+          bundle exec ruby bin/mxrb export "${RUNNER_TEMP}/drafts/Drafts.mpr" "${RUNNER_TEMP}/drafts/ruby" --mode ruby
+          npm --prefix "${RUNNER_TEMP}/drafts/ruby/frontend" ci
+          npm --prefix "${RUNNER_TEMP}/drafts/ruby/frontend" run build
+          bundle exec ruby script/browser_fixture_gate --kind app --source "${RUNNER_TEMP}/drafts/ruby" \
+            --scenario spec/fixtures/frontend_browser/presentation_persistence_flow.json --output tmp/browser-ci/persistence
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chromium-certification
+          path: tmp/browser-ci
+          retention-days: 14
 
   ruby-frontend:
     name: generated Ruby TypeScript frontend

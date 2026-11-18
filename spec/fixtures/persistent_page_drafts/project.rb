@@ -11,7 +11,7 @@ FileUtils.cp(ENV.fetch('MXRB_DATAGRID_PACKAGE'), File.join(widgets, 'com.mendix.
 Mxrb.define(destination) do
   mendix_version '11.12.1'
   self.module :Drafts do
-    entity(:Item) { string :Name }
+    entity(:Item) { string :Name, required: true }
     microflow :Load do
       return_type 'Drafts.Item'
       create_object 'Drafts.Item', as: :item, set: { Name: "'Unsaved item'" }
