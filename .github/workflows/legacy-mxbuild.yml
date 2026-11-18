@@ -52,6 +52,7 @@ jobs:
             git -C "${RUNNER_TEMP}/fixtures/$2" checkout --quiet "$3"
           }
           fetch ako/ConnectorKitDemo ConnectorKitDemo 9eed61f1fb737d189a3b018ac7691c87569053de
+          fetch ako/mxcli-sudoku sudoku 918af72e43ca8e1d61fb0c32ad13d8da94b944e2
           fetch ako/QueryApiBlogPost QueryApiBlogPost f042c01fab6ab22181329db3043928859af35217
           fetch bhataparnak/MendixApp MendixApp 8912322e170e5babb4bf77461242ae51b555ca42
           fetch mendixlabs/TreeViewAndGridView TreeViewAndGridView efe16dc5f35087f98ee4128559bc2a88552b0d81
@@ -92,7 +93,7 @@ jobs:
           f="${RUNNER_TEMP}/fixtures"
           ln -s ConnectorKitDemo "$f/connector"
           ln -s MendixApp "$f/mendix9"
-          for label in mendix7 mendix9; do
+          for label in mendix7 mendix9 mendix11; do
             bundle exec ruby script/certify_presentation_edits \
               --plan spec/fixtures/presentation_edits/cases.json --fixtures "$f" \
               --label "$label" --output "${RUNNER_TEMP}/edits-$label"
@@ -100,7 +101,7 @@ jobs:
           ruby -rjson -rfileutils <<'RUBY'
           root = File.join(ENV.fetch('RUNNER_TEMP'), 'oracle')
           cases = JSON.parse(File.read(File.join(root, 'cases.json')))
-          %w[mendix7 mendix9].each do |label|
+          %w[mendix7 mendix9 mendix11].each do |label|
             edits = File.join(ENV.fetch('RUNNER_TEMP'), "edits-#{label}")
             entry = JSON.parse(File.read(File.join(edits, 'cases.json'))).fetch(0)
             name = "presentation-#{label}"
@@ -155,6 +156,12 @@ jobs:
             mxbuild: 9.6.1.29396
             sha256: 7d8c8212b295313416620d58e9321963a9a15241c2100b7b97dcc5db34d7044f
             java: "11"
+          - label: presentation-mendix11
+            require_build: --require-build
+            mxbuild: 11.12.1
+            archive_prefix: win-
+            sha256: 1c59f25e5933b68e90e122204c99ea4ff4cac88535b720eae882b24c48d0daa6
+            java: "21"
     name: mxbuild ${{ matrix.label }}
     steps:
       - uses: actions/checkout@v5
@@ -178,7 +185,7 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           $archive = Join-Path $env:RUNNER_TEMP 'mxbuild.tar.gz'
-          $url = 'https://cdn.mendix.com/runtime/mxbuild-${{ matrix.mxbuild }}.tar.gz'
+          $url = 'https://cdn.mendix.com/runtime/${{ matrix.archive_prefix }}mxbuild-${{ matrix.mxbuild }}.tar.gz'
           try { Invoke-WebRequest $url -OutFile $archive -UseBasicParsing }
           catch { Write-Host "::error::GET $url failed: $($_.Exception.Message)"; exit 1 }
           $hash = (Get-FileHash $archive -Algorithm SHA256).Hash.ToLowerInvariant()

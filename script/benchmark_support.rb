@@ -88,7 +88,9 @@ module PipelineBenchmark
       raise ArgumentError, 'budget catalog must contain an array' unless entries.is_a?(Array)
 
       matches = entries.select { _1.fetch('compatibility') == compatibility }
-      raise ArgumentError, 'incompatible or ambiguous benchmark budget catalog' unless matches.size == 1
+      unless matches.size == 1
+        raise ArgumentError, "incompatible or ambiguous benchmark budget catalog: #{JSON.generate(compatibility)}"
+      end
 
       matches.first
     end

@@ -72,7 +72,7 @@ etapa e para o total. Essa margem é explícita e deve ser revisada à luz da
 variação observada entre execuções do runner.
 
 O [catálogo de CI](../benchmarks/sudoku-ci.json), schema 2, contém budgets
-schema 1 para as três classes de CPU medidas no
+schema 1 para as cinco classes de CPU medidas no
 [run de calibração](https://github.com/lucamykael/mxrb/actions/runs/44335031203):
 
 | CPU (4 processadores) | Limite total |
@@ -80,9 +80,13 @@ schema 1 para as três classes de CPU medidas no
 | AMD EPYC 7763 | 68,312998 s |
 | Intel Xeon 6975P-C | 43,772240 s |
 | Intel Xeon Platinum 8370C | 64,589352 s |
+| AMD EPYC 9V74 | 61,075613 s |
+| Intel Xeon Platinum 8573C | 51,540696 s |
 
-Cada classe foi medida em três relatórios independentes de três amostras.
-As [27 amostras e imagens dos runners](../evidence/benchmark-ci-2026-11-18.json)
+Cada classe foi medida em pelo menos três relatórios independentes de três amostras.
+O segundo [run de calibração](https://github.com/lucamykael/mxrb/actions/runs/44336874281)
+acrescentou duas classes e repetiu Xeon 6975P-C, cujo limite permaneceu igual.
+As [54 amostras e imagens dos runners](../evidence/benchmark-ci-2026-11-18.json)
 ficam versionadas. O gate exige exatamente uma identidade compatível; CPU,
 Ruby ou assets desconhecidos, entradas ambíguas e arquivo ausente falham antes
 da medição. Não há fallback entre CPUs nem atualização automática de limites.

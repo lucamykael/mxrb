@@ -1,7 +1,7 @@
 {
-  "run": "https://github.com/lucamykael/mxrb/actions/runs/44335031203",
   "measurements": [
     {
+      "run": "https://github.com/lucamykael/mxrb/actions/runs/44335031203",
       "artifact": "pipeline-performance-1",
       "runner": {
         "ImageOS": "ubuntu24",
@@ -91,7 +91,7 @@
                 "generate": 31.012421044999996,
                 "compare": 5.423568277000015
               },
-              "total_seconds": 46.91795075100001,
+              "total_seconds": 46.917950751000006,
               "semantic_cache": {
                 "present": true,
                 "entries": 1,
@@ -330,6 +330,7 @@
       ]
     },
     {
+      "run": "https://github.com/lucamykael/mxrb/actions/runs/44335031203",
       "artifact": "pipeline-performance-2",
       "runner": {
         "ImageOS": "ubuntu24",
@@ -658,6 +659,7 @@
       ]
     },
     {
+      "run": "https://github.com/lucamykael/mxrb/actions/runs/44335031203",
       "artifact": "pipeline-performance-3",
       "runner": {
         "ImageOS": "ubuntu24",
@@ -982,6 +984,993 @@
             "compare": 4.91789
           },
           "total_seconds": 43.059568
+        }
+      ]
+    },
+    {
+      "run": "https://github.com/lucamykael/mxrb/actions/runs/44336874281",
+      "artifact": "pipeline-performance-1",
+      "runner": {
+        "ImageOS": "ubuntu24",
+        "ImageVersion": "20261111.370.1",
+        "RUNNER_OS": "Linux",
+        "RUNNER_ARCH": "X64",
+        "GITHUB_SHA": "4743eb608f987df6e1c1437d5cca9953e9a1d50f",
+        "GITHUB_RUN_ID": "44336874281"
+      },
+      "reports": [
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "AMD EPYC 9V74 80-Core Processor",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 1.2046785360000172,
+                "semantic_index_cold": 1.2046837030000006,
+                "semantic_index_warm": 0.013232710000011139,
+                "semantic_index_readonly": 1.1850491620000412,
+                "export": 5.945932573999983,
+                "generate": 25.98982754499997,
+                "compare": 4.762085461000083
+              },
+              "total_seconds": 40.305489691000105,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 91.04,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 1.0944866300000058,
+                "semantic_index_cold": 1.3125234039999896,
+                "semantic_index_warm": 0.013067044999957034,
+                "semantic_index_readonly": 1.1636798549999412,
+                "export": 5.83878799799993,
+                "generate": 26.856792608999967,
+                "compare": 4.81605748000004
+              },
+              "total_seconds": 41.09539502099983,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 100.45,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 1.0578565360000312,
+                "semantic_index_cold": 1.1618043880000641,
+                "semantic_index_warm": 0.013187897999955567,
+                "semantic_index_readonly": 1.1717344190000176,
+                "export": 5.643315247000032,
+                "generate": 26.065948877999972,
+                "compare": 4.717229225999972
+              },
+              "total_seconds": 39.831076592000045,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 88.1,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 1.094487,
+            "semantic_index_cold": 1.204684,
+            "semantic_index_warm": 0.013188,
+            "semantic_index_readonly": 1.171734,
+            "export": 5.838788,
+            "generate": 26.065949,
+            "compare": 4.762085
+          },
+          "total_seconds": 40.30549
+        },
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "AMD EPYC 9V74 80-Core Processor",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 1.1650527120000334,
+                "semantic_index_cold": 1.249205269000072,
+                "semantic_index_warm": 0.012729047999982868,
+                "semantic_index_readonly": 1.2157259279999835,
+                "export": 5.861879925000039,
+                "generate": 26.16738971799998,
+                "compare": 4.9547116950000145
+              },
+              "total_seconds": 40.62669429500011,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 98.14,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 1.069321569000067,
+                "semantic_index_cold": 1.254968866000013,
+                "semantic_index_warm": 0.01452089299993986,
+                "semantic_index_readonly": 1.1167938109999795,
+                "export": 5.826853706000065,
+                "generate": 25.647640815000045,
+                "compare": 4.909558586000003
+              },
+              "total_seconds": 39.83965824600011,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 86.43,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 1.0904873200000793,
+                "semantic_index_cold": 1.1207597030000898,
+                "semantic_index_warm": 0.014890995999962797,
+                "semantic_index_readonly": 1.3102011050000328,
+                "export": 6.0136716440000555,
+                "generate": 26.895193726000002,
+                "compare": 5.025643653000088
+              },
+              "total_seconds": 41.47084814700031,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 75.26,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 1.090487,
+            "semantic_index_cold": 1.249205,
+            "semantic_index_warm": 0.014521,
+            "semantic_index_readonly": 1.215726,
+            "export": 5.86188,
+            "generate": 26.16739,
+            "compare": 4.954712
+          },
+          "total_seconds": 40.626694
+        },
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "AMD EPYC 9V74 80-Core Processor",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 1.1590178999999807,
+                "semantic_index_cold": 1.170986825,
+                "semantic_index_warm": 0.01334777900001427,
+                "semantic_index_readonly": 1.1836063539999486,
+                "export": 5.775593723999918,
+                "generate": 25.48329155800002,
+                "compare": 4.999391237000054
+              },
+              "total_seconds": 39.785235376999935,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 87.73,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 1.1065118509999365,
+                "semantic_index_cold": 1.128567524999994,
+                "semantic_index_warm": 0.016007474999923943,
+                "semantic_index_readonly": 1.2574383190000162,
+                "export": 5.8273690009999655,
+                "generate": 27.508753950000028,
+                "compare": 4.871577332000015
+              },
+              "total_seconds": 41.71622545299988,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 70.5,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 1.0724882859999525,
+                "semantic_index_cold": 1.2388520100000733,
+                "semantic_index_warm": 0.014321418999998059,
+                "semantic_index_readonly": 1.1818711260000327,
+                "export": 5.8173958300000095,
+                "generate": 26.71254435100002,
+                "compare": 4.679602458999966
+              },
+              "total_seconds": 40.71707548100005,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 86.5,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 1.106512,
+            "semantic_index_cold": 1.170987,
+            "semantic_index_warm": 0.014321,
+            "semantic_index_readonly": 1.183606,
+            "export": 5.817396,
+            "generate": 26.712544,
+            "compare": 4.871577
+          },
+          "total_seconds": 40.717075
+        }
+      ]
+    },
+    {
+      "run": "https://github.com/lucamykael/mxrb/actions/runs/44336874281",
+      "artifact": "pipeline-performance-2",
+      "runner": {
+        "ImageOS": "ubuntu24",
+        "ImageVersion": "20261111.370.1",
+        "RUNNER_OS": "Linux",
+        "RUNNER_ARCH": "X64",
+        "GITHUB_SHA": "4743eb608f987df6e1c1437d5cca9953e9a1d50f",
+        "GITHUB_RUN_ID": "44336874281"
+      },
+      "reports": [
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 0.9064985870000015,
+                "semantic_index_cold": 1.310366708,
+                "semantic_index_warm": 0.017056948000004013,
+                "semantic_index_readonly": 0.8261176660000018,
+                "export": 4.558548166000001,
+                "generate": 21.291602597999997,
+                "compare": 3.769028257000002
+              },
+              "total_seconds": 32.679218930000005,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 76.82,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.8507436729999966,
+                "semantic_index_cold": 0.9602867800000041,
+                "semantic_index_warm": 0.013863155999999321,
+                "semantic_index_readonly": 0.8592759000000001,
+                "export": 4.598457960000005,
+                "generate": 21.405052068000003,
+                "compare": 3.7586363470000066
+              },
+              "total_seconds": 32.446315884000015,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 69.27,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.9070886129999991,
+                "semantic_index_cold": 0.9953851060000005,
+                "semantic_index_warm": 0.0126546050000087,
+                "semantic_index_readonly": 0.8710844699999996,
+                "export": 4.811903686000008,
+                "generate": 22.390565408,
+                "compare": 3.9232724579999854
+              },
+              "total_seconds": 33.911954346,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 78.66,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 0.906499,
+            "semantic_index_cold": 0.995385,
+            "semantic_index_warm": 0.013863,
+            "semantic_index_readonly": 0.859276,
+            "export": 4.598458,
+            "generate": 21.405052,
+            "compare": 3.769028
+          },
+          "total_seconds": 32.679219
+        },
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 0.8924960109999915,
+                "semantic_index_cold": 0.8901377250000166,
+                "semantic_index_warm": 0.030234812999992755,
+                "semantic_index_readonly": 0.9435959109999885,
+                "export": 4.772445821000019,
+                "generate": 21.354044920000007,
+                "compare": 4.031394919999997
+              },
+              "total_seconds": 32.91435012100001,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 29.44,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.9127980800000159,
+                "semantic_index_cold": 0.9415780030000178,
+                "semantic_index_warm": 0.01154576799999063,
+                "semantic_index_readonly": 0.909063500000002,
+                "export": 4.812468914000021,
+                "generate": 23.009929357000004,
+                "compare": 3.987280222999999
+              },
+              "total_seconds": 34.58466384500005,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 81.55,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.9887846739999873,
+                "semantic_index_cold": 1.0632019479999997,
+                "semantic_index_warm": 0.013242337999997744,
+                "semantic_index_readonly": 0.9357719750000228,
+                "export": 4.960221019000016,
+                "generate": 22.247484385999996,
+                "compare": 4.151757490999984
+              },
+              "total_seconds": 34.360463831000004,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 80.29,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 0.912798,
+            "semantic_index_cold": 0.941578,
+            "semantic_index_warm": 0.013242,
+            "semantic_index_readonly": 0.935772,
+            "export": 4.812469,
+            "generate": 22.247484,
+            "compare": 4.031395
+          },
+          "total_seconds": 34.360464
+        },
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "INTEL(R) XEON(R) PLATINUM 8573C",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 0.8902456209999912,
+                "semantic_index_cold": 0.8823656280000023,
+                "semantic_index_warm": 0.011193303999988302,
+                "semantic_index_readonly": 0.8957049119999851,
+                "export": 4.867925006000007,
+                "generate": 21.577656655000027,
+                "compare": 3.835234706000051
+              },
+              "total_seconds": 32.96032583200005,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 78.83,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.8849275000000034,
+                "semantic_index_cold": 0.9553172489999611,
+                "semantic_index_warm": 0.012993852000022343,
+                "semantic_index_readonly": 0.9204990619999762,
+                "export": 4.766666772000008,
+                "generate": 21.76392974999999,
+                "compare": 4.098098063999998
+              },
+              "total_seconds": 33.40243224899996,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 73.52,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.9628417850000233,
+                "semantic_index_cold": 0.8587463720000414,
+                "semantic_index_warm": 0.011833723999984613,
+                "semantic_index_readonly": 0.9512856569999713,
+                "export": 4.7556912919999945,
+                "generate": 22.330250496999952,
+                "compare": 4.061020013999951
+              },
+              "total_seconds": 33.93166934099992,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 72.57,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 0.890246,
+            "semantic_index_cold": 0.882366,
+            "semantic_index_warm": 0.011834,
+            "semantic_index_readonly": 0.920499,
+            "export": 4.766667,
+            "generate": 21.76393,
+            "compare": 4.06102
+          },
+          "total_seconds": 33.402432
+        }
+      ]
+    },
+    {
+      "run": "https://github.com/lucamykael/mxrb/actions/runs/44336874281",
+      "artifact": "pipeline-performance-3",
+      "runner": {
+        "ImageOS": "ubuntu24",
+        "ImageVersion": "20261111.127.1",
+        "RUNNER_OS": "Linux",
+        "RUNNER_ARCH": "X64",
+        "GITHUB_SHA": "4743eb608f987df6e1c1437d5cca9953e9a1d50f",
+        "GITHUB_RUN_ID": "44336874281"
+      },
+      "reports": [
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 0.7525866090000051,
+                "semantic_index_cold": 0.7064164070000061,
+                "semantic_index_warm": 0.008715690000002496,
+                "semantic_index_readonly": 0.7381670269999887,
+                "export": 3.965149980999996,
+                "generate": 17.60053340399999,
+                "compare": 3.186033293999998
+              },
+              "total_seconds": 26.957602411999986,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 81.05,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.7165214810000009,
+                "semantic_index_cold": 0.7369243610000069,
+                "semantic_index_warm": 0.009221949999997037,
+                "semantic_index_readonly": 0.6823856750000061,
+                "export": 3.9019439089999963,
+                "generate": 17.341354291000002,
+                "compare": 3.1295309630000077
+              },
+              "total_seconds": 26.517882630000017,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 79.91,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.7515634599999998,
+                "semantic_index_cold": 0.7654529739999987,
+                "semantic_index_warm": 0.009088012999995954,
+                "semantic_index_readonly": 0.686675575999999,
+                "export": 3.9892023240000185,
+                "generate": 17.94252154899999,
+                "compare": 3.107930543000009
+              },
+              "total_seconds": 27.252434439000012,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 84.23,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 0.751563,
+            "semantic_index_cold": 0.736924,
+            "semantic_index_warm": 0.009088,
+            "semantic_index_readonly": 0.686676,
+            "export": 3.96515,
+            "generate": 17.600533,
+            "compare": 3.129531
+          },
+          "total_seconds": 26.957602
+        },
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 0.752769045000008,
+                "semantic_index_cold": 0.7376537840000026,
+                "semantic_index_warm": 0.011015538999998853,
+                "semantic_index_readonly": 0.743833971000015,
+                "export": 3.95428798399999,
+                "generate": 17.419022040999977,
+                "compare": 3.191407112999997
+              },
+              "total_seconds": 26.809989476999988,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 66.96,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.7789357640000105,
+                "semantic_index_cold": 0.6841798530000176,
+                "semantic_index_warm": 0.009662429000002248,
+                "semantic_index_readonly": 0.7450112390000072,
+                "export": 3.987843948999995,
+                "generate": 18.651771365000002,
+                "compare": 3.1502843209999867
+              },
+              "total_seconds": 28.00768892000002,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 70.81,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.7144679209999936,
+                "semantic_index_cold": 0.7615809419999948,
+                "semantic_index_warm": 0.009826548000006596,
+                "semantic_index_readonly": 0.7205976799999974,
+                "export": 3.9389761099999987,
+                "generate": 17.788750695000004,
+                "compare": 3.058211964999998
+              },
+              "total_seconds": 26.992411860999994,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 77.5,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 0.752769,
+            "semantic_index_cold": 0.737654,
+            "semantic_index_warm": 0.009827,
+            "semantic_index_readonly": 0.743834,
+            "export": 3.954288,
+            "generate": 17.788751,
+            "compare": 3.150284
+          },
+          "total_seconds": 26.992412
+        },
+        {
+          "schema_version": 1,
+          "fixture": "/home/runner/work/_temp/sudoku/Sudoku/Sudoku.mpr",
+          "ruby": "ruby 4.0.5 (2026-05-20 revision 64336ffd0e) +PRISM [x86_64-linux]",
+          "compatibility": {
+            "protocol": "mxrb-pipeline-v1",
+            "fixture": {
+              "name": "Sudoku.mpr",
+              "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+            },
+            "environment": {
+              "ruby_engine": "ruby",
+              "ruby_version": "4.0.5",
+              "platform": "x86_64-linux",
+              "cpu": "Intel(R) Xeon(R) 6975P-C",
+              "processors": 4
+            },
+            "assets_sha256": "1ac45a3bedefa19e2f04be009dff45f75040d28379e8298acd952a6fb8cac170",
+            "runs": 3
+          },
+          "samples": [
+            {
+              "measurements_seconds": {
+                "validate": 0.7375709419999907,
+                "semantic_index_cold": 0.6909611600000005,
+                "semantic_index_warm": 0.008912051999999449,
+                "semantic_index_readonly": 0.717202766000014,
+                "export": 3.958225347999985,
+                "generate": 17.20545385400004,
+                "compare": 3.101365824000027
+              },
+              "total_seconds": 26.419691946000057,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 77.53,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.7158066520000261,
+                "semantic_index_cold": 0.8026258620000135,
+                "semantic_index_warm": 0.009587190000047485,
+                "semantic_index_readonly": 0.708790797000006,
+                "export": 3.8303294099999903,
+                "generate": 17.895918715999983,
+                "compare": 3.1003850650000118
+              },
+              "total_seconds": 27.063443692000078,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 83.72,
+                "cleared": true
+              }
+            },
+            {
+              "measurements_seconds": {
+                "validate": 0.7839774270000248,
+                "semantic_index_cold": 0.7837284610000097,
+                "semantic_index_warm": 0.009532631000013225,
+                "semantic_index_readonly": 0.7135233289999974,
+                "export": 3.8656116299999894,
+                "generate": 18.284182633,
+                "compare": 3.0891575780000267
+              },
+              "total_seconds": 27.52971368900006,
+              "semantic_cache": {
+                "present": true,
+                "entries": 1,
+                "bytes": 424619,
+                "fingerprints": [
+                  "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093"
+                ],
+                "current_fingerprint": "76ff7fd20eb34ac327b6f1a495c597e5588fb4a5e5e553bc849e99ee14bb0093",
+                "hit": true,
+                "speedup": 82.22,
+                "cleared": true
+              }
+            }
+          ],
+          "measurements_seconds": {
+            "validate": 0.737571,
+            "semantic_index_cold": 0.783728,
+            "semantic_index_warm": 0.009533,
+            "semantic_index_readonly": 0.713523,
+            "export": 3.865612,
+            "generate": 17.895919,
+            "compare": 3.100385
+          },
+          "total_seconds": 27.063444
         }
       ]
     }
