@@ -65,6 +65,7 @@ module PipelineBenchmark
   # A budget only applies to the exact fixture, protocol, run count and machine class.
   class Budget
     def initialize(data, compatibility)
+      data = select_machine_budget(data, compatibility) if data.fetch('schema_version') == 2
       raise ArgumentError, 'unsupported budget schema_version' unless data.fetch('schema_version') == 1
       raise ArgumentError, 'incompatible benchmark budget' unless data.fetch('compatibility') == compatibility
 
@@ -81,6 +82,16 @@ module PipelineBenchmark
     end
 
     private
+
+    def select_machine_budget(catalog, compatibility)
+      entries = catalog.fetch('budgets')
+      raise ArgumentError, 'budget catalog must contain an array' unless entries.is_a?(Array)
+
+      matches = entries.select { _1.fetch('compatibility') == compatibility }
+      raise ArgumentError, 'incompatible or ambiguous benchmark budget catalog' unless matches.size == 1
+
+      matches.first
+    end
 
     def validate_limits!
       unless @limits.is_a?(Hash) && @limits.keys.sort == METRICS.sort

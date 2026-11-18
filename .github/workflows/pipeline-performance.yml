@@ -1,12 +1,7 @@
 name: Pipeline performance
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/pipeline-performance.yml'
-      - 'script/benchmark*'
-      - 'script/calibrate_benchmark'
-      - 'docs/benchmarks/**'
+  workflow_call:
   workflow_dispatch:
     inputs:
       mode:
@@ -22,9 +17,6 @@ jobs:
   benchmark:
     runs-on: ubuntu-24.04
     timeout-minutes: 20
-    strategy:
-      matrix:
-        runner_sample: [1, 2, 3]
     steps:
       - uses: actions/checkout@v5
       - uses: ruby/setup-ruby@v1
@@ -39,7 +31,7 @@ jobs:
         run: |
           ruby -rjson -e 'puts JSON.pretty_generate(ENV.to_h.slice("ImageOS", "ImageVersion", "RUNNER_OS", "RUNNER_ARCH", "GITHUB_SHA", "GITHUB_RUN_ID"))' > "${RUNNER_TEMP}/runner.json"
       - name: Collect three independent measurements and a candidate budget
-        if: inputs.mode != 'verify'
+        if: inputs.mode == 'calibrate'
         env:
           MXRB_BENCHMARK_MPR: ${{ runner.temp }}/sudoku/Sudoku/Sudoku.mpr
         run: |
@@ -48,7 +40,7 @@ jobs:
           done
           bundle exec ruby script/calibrate_benchmark "${RUNNER_TEMP}"/benchmark-*.json > "${RUNNER_TEMP}/candidate-budget.json"
       - name: Enforce reviewed runner budget
-        if: inputs.mode == 'verify'
+        if: inputs.mode != 'calibrate'
         env:
           MXRB_BENCHMARK_MPR: ${{ runner.temp }}/sudoku/Sudoku/Sudoku.mpr
         run: |
@@ -56,7 +48,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: pipeline-performance-${{ matrix.runner_sample }}
+          name: pipeline-performance
           path: |
             ${{ runner.temp }}/benchmark*.json
             ${{ runner.temp }}/candidate-budget.json

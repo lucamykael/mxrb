@@ -35,7 +35,7 @@ RSpec.describe PipelineBenchmark do # rubocop:disable Metrics/BlockLength
   it 'rejects incompatible identities, unknown schemas and malformed limits' do
     expect { described_class::Budget.new(budget, identity.merge('runs' => 4)) }
       .to raise_error(ArgumentError, /incompatible/)
-    expect { described_class::Budget.new(budget.merge('schema_version' => 2), identity) }
+    expect { described_class::Budget.new(budget.merge('schema_version' => 99), identity) }
       .to raise_error(ArgumentError, /schema/)
     [limits.except('export'), limits.merge('typo' => 1), []].each do |invalid|
       expect { described_class::Budget.new(budget.merge('limits_seconds' => invalid), identity) }
@@ -47,6 +47,18 @@ RSpec.describe PipelineBenchmark do # rubocop:disable Metrics/BlockLength
       end
         .to raise_error(ArgumentError, /positive finite/)
     end
+  end
+
+  it 'selects exactly one measured machine class without falling back to another runner' do
+    catalog = { 'schema_version' => 2, 'budgets' => [budget, budget.merge('compatibility' => { 'cpu' => 'other' })] }
+    report = { measurements_seconds: described_class::STAGES.to_h { [_1, 1.0] }, total_seconds: 1.0 }
+    expect(described_class::Budget.new(catalog, identity).check(report)).to eq(passed: true, exceeded: [])
+    expect { described_class::Budget.new(catalog, identity.merge('runs' => 9)) }
+      .to raise_error(ArgumentError, /incompatible/)
+    expect { described_class::Budget.new(catalog.merge('budgets' => [budget, budget]), identity) }
+      .to raise_error(ArgumentError, /ambiguous/)
+    expect { described_class::Budget.new(catalog.merge('budgets' => {}), identity) }
+      .to raise_error(ArgumentError, /array/)
   end
 
   it 'checks compatibility before running any expensive sample' do

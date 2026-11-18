@@ -10,6 +10,9 @@ permissions:
   contents: read
 
 jobs:
+  performance:
+    uses: ./.github/workflows/pipeline-performance.yml
+
   test:
     name: test
     runs-on: ubuntu-latest
@@ -95,17 +98,6 @@ jobs:
       - name: Run gradual Ruby quality gate
         run: bundle exec rubocop
 
-      - name: Measure the pinned pipeline for runner-specific budget calibration
-        env:
-          MXRB_BENCHMARK_MPR: /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr
-        run: bundle exec ruby script/benchmark --runs 3 > "${RUNNER_TEMP}/benchmark.json"
-
-      - uses: actions/upload-artifact@v4
-        with:
-          name: pipeline-benchmark
-          path: ${{ runner.temp }}/benchmark.json
-          retention-days: 14
-
       - name: Validate the portable Ruby application projection
         run: bundle exec ruby script/validate_ruby_app /tmp/mxcli-sudoku/Sudoku/Sudoku.mpr
 
@@ -159,6 +151,8 @@ jobs:
             bundle exec ruby script/browser_fixture_gate --kind modeler --source "${RUNNER_TEMP}/catalog.mpr" \
               --scenario "spec/fixtures/frontend_browser/${scenario}_flow.json" --output "tmp/browser-ci/$scenario"
           done
+          bundle exec ruby script/browser_fixture_gate --kind domain --source "${RUNNER_TEMP}/catalog.mpr" \
+            --scenario spec/fixtures/frontend_browser/domain_diagram_flow.json --output tmp/browser-ci/domain
       - name: Prepare the edited pinned Sudoku fixture
         run: |
           mkdir -p "${RUNNER_TEMP}/fixtures"

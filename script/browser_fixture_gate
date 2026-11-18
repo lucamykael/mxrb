@@ -17,8 +17,11 @@ module BrowserFixtureGate
       raise ArgumentError, 'fixture scenarios must explicitly disable authentication'
     end
 
-    klass = { 'app' => Mxrb::RubyApp::Server, 'modeler' => Mxrb::Uml::Server }.fetch(kind)
-    server = klass.new(source, port: 0)
+    FileUtils.mkdir_p(output)
+    klass = { 'app' => Mxrb::RubyApp::Server, 'modeler' => Mxrb::Uml::Server,
+              'domain' => Mxrb::DomainDiagram::Server }.fetch(kind)
+    options = kind == 'domain' ? { output: File.join(output, 'edited.mpr') } : {}
+    server = klass.new(source, port: 0, **options)
     ready = Queue.new
     thread = Thread.new do
       server.start { ready << _1.binder.ios.first.local_address.ip_port }
@@ -42,7 +45,7 @@ module BrowserFixtureGate
   def cli(argv) # rubocop:disable Metrics/AbcSize
     options = {}
     OptionParser.new do |parser|
-      parser.banner = 'Usage: script/browser_fixture_gate --kind app|modeler --source PATH --scenario FILE --output DIR'
+      parser.banner = 'Usage: script/browser_fixture_gate --kind KIND --source PATH --scenario FILE --output DIR'
       %i[kind source scenario output].each { |key| parser.on("--#{key} VALUE") { options[key] = _1 } }
     end.parse!(argv)
     raise ArgumentError, 'all options are required' unless options.keys.sort == %i[kind output scenario source]

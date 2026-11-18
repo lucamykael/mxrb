@@ -49,10 +49,9 @@ Execute a fixture fixada sem `--budget`, revise as amostras e registre a
 métricas e faça outra execução com o novo budget. Não altere a identidade de um
 budget antigo apenas para contornar uma recusa de compatibilidade.
 
-O CI publica o artefato `pipeline-benchmark` com três execuções. Ele permite
-calibrar um budget próprio do runner; o limite local não é aplicado a máquinas
-GitHub com hardware diferente. Os testes do CI verificam deterministicamente
-as decisões de aprovação, regressão e incompatibilidade.
+O CI executa um job separado no Ubuntu 24.04/Ruby 4.0.5, com três amostras e
+`--budget docs/benchmarks/sudoku-ci.json`, em todo PR e push para main.
+O artefato `pipeline-performance` publica medições, diagnóstico e imagem do runner.
 
 ## Calibração revisável no GitHub Actions
 
@@ -72,12 +71,22 @@ A política inicial aplica 50% de margem sobre a maior mediana observada, por
 etapa e para o total. Essa margem é explícita e deve ser revisada à luz da
 variação observada entre execuções do runner.
 
-Após conferir artefatos e variação em mais de uma execução, versione o budget
-como `docs/benchmarks/sudoku-ci.json`, execute `verify` e acrescente `--budget`
-à medição do workflow principal com ambiente compatível. `verify` já exige
-esse caminho e falha se estiver ausente/incompatível; publica medições e erros
-mesmo quando o comando falha. Nunca recalibra automaticamente durante o gate.
+O [catálogo de CI](../benchmarks/sudoku-ci.json), schema 2, contém budgets
+schema 1 para as três classes de CPU medidas no
+[run de calibração](https://github.com/lucamykael/mxrb/actions/runs/44335031203):
 
-Esse arquivo ainda não foi criado: os runs disponíveis precedem a publicação
-das novas medições. O budget local não foi copiado nem usado como limite de CI.
-MXRB-010 permanece aberto até a calibração real e a ativação no workflow principal.
+| CPU (4 processadores) | Limite total |
+|---|---:|
+| AMD EPYC 7763 | 68,312998 s |
+| Intel Xeon 6975P-C | 43,772240 s |
+| Intel Xeon Platinum 8370C | 64,589352 s |
+
+Cada classe foi medida em três relatórios independentes de três amostras.
+As [27 amostras e imagens dos runners](../evidence/benchmark-ci-2026-11-18.json)
+ficam versionadas. O gate exige exatamente uma identidade compatível; CPU,
+Ruby ou assets desconhecidos, entradas ambíguas e arquivo ausente falham antes
+da medição. Não há fallback entre CPUs nem atualização automática de limites.
+
+Para acrescentar uma classe, execute `calibrate` nesse runner, revise os três
+relatórios, versione o novo candidato e execute `verify`. Uma alteração dos
+limites deve justificar a margem e manter as medições que a fundamentam.

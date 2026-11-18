@@ -1,0 +1,56 @@
+{
+  "name": "mxrb-domain-diagram",
+  "authentication": false,
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "pages": [
+    {
+      "name": "domain",
+      "path": "/",
+      "steps": [
+        {
+          "wait_for_text": "Domain Model"
+        },
+        {
+          "wait_for_selector": ".entity"
+        },
+        {
+          "wait_for_text": "Customer"
+        },
+        {
+          "click_text": "Limpar"
+        },
+        {
+          "wait_for_absence": ".entity"
+        },
+        {
+          "click_text": "Todos"
+        },
+        {
+          "wait_for_selector": ".entity"
+        },
+        {
+          "click_text": "Auto-organizar"
+        },
+        {
+          "click_text": "Ajustar \u00e0 tela"
+        },
+        {
+          "select_option": {
+            "selector": "select[aria-label=\"Visibilidade dos atributos\"]",
+            "option_index": 2
+          }
+        },
+        {
+          "click_text": "Salvar layout no MPR"
+        }
+      ],
+      "selectors": [
+        ".domain-diagram-root",
+        ".entity"
+      ]
+    }
+  ]
+}
