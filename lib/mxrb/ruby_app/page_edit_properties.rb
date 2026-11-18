@@ -16,7 +16,7 @@ module Mxrb
       CONTRACTS = {
         'button' => [%w[Forms$ActionButton Forms$GridActionButton Pages$ActionButton], {
           'button_style' => ['ButtonStyle', %w[Default Primary Info Success Warning Danger Inverse]],
-          'render_type' => ['RenderType', %w[Button Link]], 'tab_index' => ['TabIndex', :integer]
+          'render_type' => ['RenderType', %w[Button Link]]
         }],
         'text' => [%w[Forms$DynamicText Forms$Label Pages$DynamicText Pages$Label], {
           'render_mode' => ['RenderMode', %w[Text H1 H2 H3 H4 H5 H6 Paragraph]]
@@ -35,6 +35,7 @@ module Mxrb
         'check_box' => [%w[Forms$CheckBox Pages$CheckBox], INPUT_FIELDS],
         'date_picker' => [%w[Forms$DatePicker Pages$DatePicker], INPUT_FIELDS]
       }.freeze
+      OMITTED_DEFAULTS = { 'RenderType' => 'button', 'RenderMode' => 'text' }.freeze
 
       module_function
 
@@ -44,7 +45,7 @@ module Mxrb
 
       def apply(owner, type, key, before, after)
         field, values = field_spec(owner, type, key)
-        previous = encode(before, values)
+        previous = encode(before.nil? ? OMITTED_DEFAULTS.fetch(field, nil) : before, values)
         current = encode(after, values)
         raise ArgumentError, "#{field} no longer matches the exported Ruby baseline" unless owner[field] == previous
 

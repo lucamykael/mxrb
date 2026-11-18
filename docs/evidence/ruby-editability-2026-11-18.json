@@ -95,8 +95,8 @@
             "field": [
               "ShowFooter"
             ],
-            "before": true,
-            "after": false
+            "before": false,
+            "after": true
           },
           {
             "unit": "Administration.Account_New",
@@ -130,8 +130,8 @@
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Editable: true != false",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.LabelWidth: 3 != 4",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.ReadOnlyStyle: \"Text\" != \"Control\"",
-          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.ShowFooter: true != false",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.TabIndex: 0 != 1",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.ShowFooter: false != true",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.Editable: \"Always\" != \"Never\"",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.IsPasswordBox: false != true",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widget.Widget.Widgets.dataView1.Widget.Widgets.textBox6.MaxLengthCode: -1 != 32",
@@ -140,8 +140,8 @@
           "modules.Administration.pages.Account_New.widgets.dataView2.options.editable: :always != :never",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.label_width: 3 != 4",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.read_only_style: :text != :control",
-          "modules.Administration.pages.Account_New.widgets.dataView2.options.show_footer: true != false",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.tab_index: 0 != 1",
+          "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].ShowFooter: false != true",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].Editable: \"Always\" != \"Never\"",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].IsPasswordBox: false != true",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.unknown_native.Widget.Widgets.[1].Widget.Widgets.[1].MaxLengthCode: -1 != 32",
@@ -225,8 +225,8 @@
             "field": [
               "ShowFooter"
             ],
-            "before": true,
-            "after": false
+            "before": false,
+            "after": true
           },
           {
             "unit": "Administration.Account_New",
@@ -260,8 +260,8 @@
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Editable: true != false",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.LabelWidth: 3 != 4",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.ReadOnlyStyle: \"Text\" != \"Control\"",
-          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.ShowFooter: true != false",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.TabIndex: 0 != 1",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.ShowFooter: false != true",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.Editable: \"Always\" != \"Never\"",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.IsPasswordBox: false != true",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.MaxLengthCode: -1 != 32",
@@ -270,7 +270,6 @@
           "modules.Administration.pages.Account_New.widgets.dataView2.options.editable: :always != :never",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.label_width: 3 != 4",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.read_only_style: :text != :control",
-          "modules.Administration.pages.Account_New.widgets.dataView2.options.show_footer: true != false",
           "modules.Administration.pages.Account_New.widgets.dataView2.options.tab_index: 0 != 1"
         ],
         "native_oracle": "not_run"
@@ -350,8 +349,8 @@
             "field": [
               "ShowFooter"
             ],
-            "before": true,
-            "after": false
+            "before": false,
+            "after": true
           },
           {
             "unit": "Administration.Account_New",
@@ -412,8 +411,8 @@
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Editability: \"Always\" != \"Never\"",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.LabelWidth: 3 != 4",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.ReadOnlyStyle: \"Text\" != \"Control\"",
-          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.ShowFooter: true != nil",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.TabIndex: 0 != 1",
+          "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.ShowFooter: nil != true",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.AriaRequired: nil != true",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.Editable: \"Always\" != \"Never\"",
           "modules.Administration.pages.Account_New.document.FormCall.Arguments.[1].Widgets.layoutGrid1.Rows.[1].Columns.[1].Widgets.dataView2.Widgets.dataView1.Widgets.textBox6.IsPasswordBox: nil != true",
@@ -426,10 +425,10 @@
           "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.password: false != true",
           "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.read_only_style: :inherit != :text",
           "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.body.textBox6.options.tab_index: 0 != 2",
+          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.body.dataView1.options.show_footer: false != true",
           "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.editable: :always != :never",
           "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.label_width: 3 != 4",
           "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.read_only_style: :text != :control",
-          "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.show_footer: true != false",
           "modules.Administration.pages.Account_New.widgets.layoutGrid1.options.rows.[0].columns.[0].widgets.dataView2.options.tab_index: 0 != 1",
           "modules.Sudoku.pages.Home.document.FormCall.Arguments.[1].Widgets.conditionalVisibilityWidget1.Widgets.sdHomeShell.Widgets.sdCards.Widgets.sdCardEasy.Widgets.bEasy.ButtonStyle: \"Primary\" != \"Success\"",
           "modules.Sudoku.pages.Home.document.FormCall.Arguments.[1].Widgets.conditionalVisibilityWidget1.Widgets.sdHomeShell.Widgets.sdHero.Widgets.sdHeroTitle.RenderMode: \"H1\" != \"H2\"",
@@ -443,8 +442,10 @@
   "independent_expectation": "Expected copies are modified directly at the native field paths recorded in the plan; all units are compared, not only edited values",
   "isolated_tests": {
     "source": "spec/ruby_page_property_edits_spec.rb",
-    "property_roundtrips": 13,
-    "reexport_checked": true
+    "property_roundtrips": 15,
+    "reexport_checked": true,
+    "examples": 19,
+    "failures": 0
   },
   "remaining": [
     "widget additions and structural changes",
@@ -454,5 +455,45 @@
     "Marketplace-specific editing",
     "localized and initially empty text properties",
     "non-presentation document audit"
-  ]
+  ],
+  "browser": {
+    "scenario": "spec/fixtures/frontend_browser/page_property_edits_flow.json",
+    "passed": true,
+    "steps": 44,
+    "console_errors": [],
+    "report_sha256": "ad7bd2b61a1fa9ee635568f24ab44379b10fd90d013a47807c36cbda281448fa",
+    "checks": [
+      "h2 heading replaces h1",
+      "edited easy button has btn-success",
+      "unchanged medium button retains btn-primary",
+      "reload preserves the changed rendering",
+      "Sudoku gameplay across difficulties, hint, undo and notes"
+    ]
+  },
+  "silent_loss_regressions": {
+    "baseline_commit": "f0a5ab80feb50eaa378e178112c15d86276a1b09",
+    "baseline_component": "lib/mxrb/ruby_app/page_edits.rb",
+    "probes": [
+      "autofocus",
+      "excluded"
+    ],
+    "before": "both edits compiled without rejection and were omitted from synchronization",
+    "after": "both raise UnsupportedEdit; no claim of native edit support for these properties",
+    "before_regression_examples": 2,
+    "before_regression_failures": 2
+  },
+  "native_rejected_operation": {
+    "run": "https://github.com/lucamykael/mxrb/actions/runs/44364326890",
+    "operation": "Hide Administration.Account_New dataView2 footer containing page action buttons",
+    "versions": [
+      "7.5.0",
+      "9.6.1.29396",
+      "11.12.1"
+    ],
+    "structural_comparison_passed": true,
+    "native_build_passed": false,
+    "diagnostic": "A hidden footer may only contain a button that is configured as the close action of the page.",
+    "corrected_plan": "Show the initially hidden, empty dataView1 footer; preserve the outer dataView2 footer and its buttons",
+    "limitation": "Exact native field synchronization does not implement every Studio Pro consistency rule"
+  }
 }

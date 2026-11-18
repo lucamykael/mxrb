@@ -20,7 +20,9 @@ Cada operação precisa demonstrar, separadamente:
 
 O relatório `portability` descreve a materialização em Mendix; seu status
 `native` não deve ser interpretado como cobertura de todas as operações de
-edição Ruby. Uma operação não testada permanece não certificada.
+edição Ruby. Uma operação não testada permanece não certificada. O JSON de `portability`
+agora inclui `ruby_page_editing`, com as opções escalares e as limitações
+explícitas desse contrato, sem convertê-las em alegação de certificação.
 
 ## Achados reproduzidos
 
@@ -52,7 +54,8 @@ As operações cobrem `editable`, `read_only_style`, `password`, `max_length`,
 `tab_index`, `label_width`, `show_footer`, `aria_required`, `button_style` e
 `render_mode`. A suíte isolada também verifica `render_type`, uma segunda
 exportação, rejeição de valores inválidos, campos inexistentes, tipos nativos
-incompatíveis e divergência da baseline. Campos não presentes na versão de
+incompatíveis e divergência da baseline. Também permite definir `render_type`
+e `render_mode` quando seus valores padrão foram omitidos da declaração exportada. Campos não presentes na versão de
 origem continuam sendo recusados; nenhum default de outra versão é introduzido.
 
 ```sh
@@ -70,15 +73,28 @@ original permanece intacta. `edits.json` registra cada valor anterior e novo;
 
 O workflow `Legacy MxBuild oracle` inclui três casos adicionais para essas
 propriedades e exige `--require-build`. Comparação estrutural e aprovação
-nativa têm resultados separados. A cobertura sintética de uma propriedade
+nativa têm resultados separados. O cenário
+`page_property_edits_flow.json` verifica em 44 passos o título `h2`, o estilo
+do botão, recarga e gameplay no Chromium, sem erros de console. A cobertura sintética de uma propriedade
 não certifica automaticamente todas as versões, widgets ou combinações.
+
+### Reprovação nativa que a comparação estrutural não detectou
+
+No [primeiro ensaio nativo](https://github.com/lucamykael/mxrb/actions/runs/44364326890),
+os três casos de propriedades foram reprovados: ocultar o rodapé externo de
+`Administration.Account_New` deixava botões incompatíveis com a regra do Mendix
+para rodapés ocultos. O MPR correspondia exatamente à edição solicitada, mas essa
+edição não formava uma página válida. O plano passou a mostrar o rodapé interno,
+originalmente vazio, mantendo os botões externos. A reprovação fica registrada
+como evidência de que comparação integral não substitui compilação nativa;
+`PageEdits` não implementa todas as regras de consistência do Studio Pro.
 
 ## Backlog de editabilidade
 
 | ID | Prioridade | Operação | Situação e prova necessária |
 |---|---|---|---|
 | EDIT-001 | P0 | Detectar alterações de contrato de página ignoradas | Implementado: alterações não suportadas em parâmetros, variáveis, popup, autofocus e exclusão falham explicitamente. |
-| EDIT-002 | P1 | Sincronizar propriedades escalares já exportadas | Implementado; validar os 33 campos reais e os pacotes nativos pelo plano acima. |
+| EDIT-002 | P1 | Sincronizar propriedades escalares já exportadas | 33 campos reais aprovados na comparação integral; 15 ensaios isolados também cobrem reexportação. A certificação nativa é registrada separadamente. |
 | EDIT-003 | P1 | Alterar bindings, fontes de dados e ações de widgets | `PageEdits` ainda recusa essas mudanças; exigir edição isolada, execução da ação e comparação integral. |
 | EDIT-004 | P1 | Adicionar, mover e renomear widgets em páginas existentes | A inclusão é recusada; remoção/reordenação têm suporte limitado à estrutura que o sincronizador encontra. Exigir testes de parent, listas e campos singulares, identidades e referências. |
 | EDIT-005 | P1 | Editar parâmetros, variáveis, popup e acesso à página | Atualmente recusado na projeção da aplicação; implementar transformação nativa por versão e cenários de chamada/acesso. |

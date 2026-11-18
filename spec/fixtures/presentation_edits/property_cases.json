@@ -85,15 +85,15 @@
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
-          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 4,\n            show_footer: true",
-          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 4,\n            show_footer: false",
+          "from": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: false",
+          "to": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: true",
           "unit": "Administration.Account_New",
           "kind": "page",
-          "widget": "dataView2",
+          "widget": "dataView1",
           "field": [
             "ShowFooter"
           ],
-          "value": false
+          "value": true
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
@@ -121,8 +121,8 @@
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
-          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: false,\n            no_entity_message: \"\",\n            tab_index: 0",
-          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: false,\n            no_entity_message: \"\",\n            tab_index: 1",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 0",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 1",
           "unit": "Administration.Account_New",
           "kind": "page",
           "widget": "dataView2",
@@ -217,15 +217,15 @@
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
-          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 4,\n            show_footer: true",
-          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 4,\n            show_footer: false",
+          "from": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\", from: page_variable(nil, kind: :current)),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: false",
+          "to": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\", from: page_variable(nil, kind: :current)),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: true",
           "unit": "Administration.Account_New",
           "kind": "page",
-          "widget": "dataView2",
+          "widget": "dataView1",
           "field": [
             "ShowFooter"
           ],
-          "value": false
+          "value": true
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
@@ -253,8 +253,8 @@
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
-          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: false,\n            no_entity_message: \"\",\n            tab_index: 0",
-          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: false,\n            no_entity_message: \"\",\n            tab_index: 1",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 0",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 1",
           "unit": "Administration.Account_New",
           "kind": "page",
           "widget": "dataView2",
@@ -349,15 +349,15 @@
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
-          "from": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"always\",\n                  read_only_style: \"text\",\n                  label_width: 4,\n                  show_footer: true",
-          "to": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"always\",\n                  read_only_style: \"text\",\n                  label_width: 4,\n                  show_footer: false",
+          "from": "data_view(\n                      \"dataView1\",\n                      from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                      editable: \"always\",\n                      read_only_style: \"text\",\n                      label_width: 3,\n                      show_footer: false",
+          "to": "data_view(\n                      \"dataView1\",\n                      from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                      editable: \"always\",\n                      read_only_style: \"text\",\n                      label_width: 3,\n                      show_footer: true",
           "unit": "Administration.Account_New",
           "kind": "page",
-          "widget": "dataView2",
+          "widget": "dataView1",
           "field": [
             "ShowFooter"
           ],
-          "value": false
+          "value": true
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
@@ -385,8 +385,8 @@
         },
         {
           "file": "app/pages/administration/account_new_page.rb",
-          "from": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"control\",\n                  label_width: 4,\n                  show_footer: false,\n                  no_entity_message: \"\",\n                  tab_index: 0",
-          "to": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"control\",\n                  label_width: 4,\n                  show_footer: false,\n                  no_entity_message: \"\",\n                  tab_index: 1",
+          "from": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"control\",\n                  label_width: 4,\n                  show_footer: true,\n                  no_entity_message: \"\",\n                  tab_index: 0",
+          "to": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"control\",\n                  label_width: 4,\n                  show_footer: true,\n                  no_entity_message: \"\",\n                  tab_index: 1",
           "unit": "Administration.Account_New",
           "kind": "page",
           "widget": "dataView2",

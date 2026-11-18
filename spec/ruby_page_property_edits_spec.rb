@@ -41,7 +41,9 @@ RSpec.describe 'Exported Ruby page property edits' do # rubocop:disable Metrics/
   [
     ['Save', 'ButtonStyle', 'Primary', 'Success', 'button_style: "primary"', 'button_style: "success"'],
     ['Save', 'RenderType', 'Link', 'Button', 'render_type: "link"', 'render_type: "button"'],
+    ['Save', 'RenderType', 'Button', 'Link', 'caption: "Save"', 'caption: "Save", render_type: "link"'],
     ['Heading', 'RenderMode', 'H1', 'H2', 'render_mode: "h1"', 'render_mode: "h2"'],
+    ['Heading', 'RenderMode', 'Text', 'H2', 'caption: "Details"', 'caption: "Details", render_mode: "h2"'],
     ['Name', 'Editable', 'Never', 'Always', 'editable: "never"', 'editable: "always"'],
     ['Name', 'ReadOnlyStyle', 'Text', 'Control', 'read_only_style: "text"', 'read_only_style: "control"'],
     ['Name', 'MaxLengthCode', 19, 31, 'max_length: 19', 'max_length: 31'],

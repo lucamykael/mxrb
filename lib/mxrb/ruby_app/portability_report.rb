@@ -32,11 +32,21 @@ module Mxrb
             preserved_native: 'kept unchanged in the reversible Mendix sidecar',
             runtime_only: 'requires the MXRB Ruby/TypeScript runtime'
           },
-          entries: entries.map(&:to_h), widgets:
+          entries: entries.map(&:to_h), widgets:, ruby_page_editing:
         }
       end
 
       private
+
+      def ruby_page_editing
+        {
+          scope: 'existing exported pages with a native baseline; fields must exist in the source Mendix version',
+          scalar_options: PageEditProperties::CONTRACTS.transform_values { _1.last.keys },
+          unsupported: ['adding or renaming widgets', 'bindings, data sources and events',
+                        'roles, parameters, variables, popup, autofocus and exclusion'],
+          certification: 'Capability contract only; native status is not certification of every Ruby edit operation'
+        }
+      end
 
       def build_entries
         load_registry
