@@ -174,6 +174,19 @@ jobs:
           npm --prefix "$app/frontend" run build
           bundle exec ruby script/browser_fixture_gate --kind app --source "$app" \
             --scenario spec/fixtures/frontend_browser/presentation_edits_sudoku_flow.json --output tmp/browser-ci/sudoku
+      - name: Certify scalar property edits and preserved gameplay
+        run: |
+          ln -s sudoku "${RUNNER_TEMP}/fixtures/mxcli-sudoku"
+          bundle exec ruby script/certify_presentation_edits \
+            --plan spec/fixtures/presentation_edits/property_cases.json \
+            --fixtures "${RUNNER_TEMP}/fixtures" --label mendix11-properties \
+            --output "${RUNNER_TEMP}/property-edits"
+          app="${RUNNER_TEMP}/property-edits/mendix11-properties/ruby"
+          npm --prefix "$app/frontend" ci
+          npm --prefix "$app/frontend" run build
+          bundle exec ruby script/browser_fixture_gate --kind app --source "$app" \
+            --scenario spec/fixtures/frontend_browser/page_property_edits_flow.json \
+            --output tmp/browser-ci/properties
       - name: Certify persistence and visible validation errors from an empty database
         env:
           MXRB_DATAGRID_PACKAGE: ${{ runner.temp }}/fixtures/sudoku/Sudoku/widgets/com.mendix.widget.web.Datagrid.mpk

@@ -1,0 +1,437 @@
+{
+  "schema_version": 1,
+  "cases": [
+    {
+      "label": "mendix7-properties",
+      "mpr": "ConnectorKitDemo/ConnectorKitDemo.mpr",
+      "repository": "https://github.com/ako/ConnectorKitDemo",
+      "revision": "9eed61f1fb737d189a3b018ac7691c87569053de",
+      "fixture": {
+        "name": "ConnectorKitDemo.mpr",
+        "sha256": "f6afbea72e73a6ef5f2ae97ff37c2fff10ef0f5c7270646a1cd2f509a8a9d3ec"
+      },
+      "edits": [
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"always\"",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "Editable"
+          ],
+          "value": "Never"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"inherit\"",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "ReadOnlyStyle"
+          ],
+          "value": "Text"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    placeholder: \"\",\n                    password: false",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    placeholder: \"\",\n                    password: true",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "IsPasswordBox"
+          ],
+          "value": true
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: -1",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: 32",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "MaxLengthCode"
+          ],
+          "value": 32
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: 32,\n                    tab_index: 0",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: 32,\n                    tab_index: 2",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "TabIndex"
+          ],
+          "value": 2
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 3",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 4",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "LabelWidth"
+          ],
+          "value": 4
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: false",
+          "to": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: true",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView1",
+          "field": [
+            "ShowFooter"
+          ],
+          "value": true
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"always\"",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "Editable"
+          ],
+          "value": false
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"text\"",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"control\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "ReadOnlyStyle"
+          ],
+          "value": "Control"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 0",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\"),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 1",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "TabIndex"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "mendix9-properties",
+      "mpr": "MendixApp/FirstMedix App.mpr",
+      "repository": "https://github.com/bhataparnak/MendixApp",
+      "revision": "8912322e170e5babb4bf77461242ae51b555ca42",
+      "fixture": {
+        "name": "FirstMedix App.mpr",
+        "sha256": "96743656641fdebbf82db46c147d666eee5180fc38f2125572594903e9df6b33"
+      },
+      "edits": [
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"always\"",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "Editable"
+          ],
+          "value": "Never"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"inherit\"",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "ReadOnlyStyle"
+          ],
+          "value": "Text"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    aria_label: \"\",\n                    placeholder: \"\",\n                    password: false",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    aria_label: \"\",\n                    placeholder: \"\",\n                    password: true",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "IsPasswordBox"
+          ],
+          "value": true
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    aria_label: \"\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: -1",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    aria_label: \"\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: 32",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "MaxLengthCode"
+          ],
+          "value": 32
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    aria_label: \"\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: 32,\n                    aria_required: false,\n                    tab_index: 0",
+          "to": "text_box(\n                    \"textBox6\",\n                    attribute: \"Administration.Account.FullName\",\n                    caption: \"Full name\",\n                    editable: \"never\",\n                    read_only_style: \"text\",\n                    aria_label: \"\",\n                    placeholder: \"\",\n                    password: true,\n                    max_length: 32,\n                    aria_required: false,\n                    tab_index: 2",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "TabIndex"
+          ],
+          "value": 2
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 3",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"always\",\n            read_only_style: \"text\",\n            label_width: 4",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "LabelWidth"
+          ],
+          "value": 4
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\", from: page_variable(nil, kind: :current)),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: false",
+          "to": "data_view(\n                \"dataView1\",\n                from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\", from: page_variable(nil, kind: :current)),\n                editable: \"always\",\n                read_only_style: \"text\",\n                label_width: 3,\n                show_footer: true",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView1",
+          "field": [
+            "ShowFooter"
+          ],
+          "value": true
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"always\"",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "Editable"
+          ],
+          "value": false
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"text\"",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"control\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "ReadOnlyStyle"
+          ],
+          "value": "Control"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 0",
+          "to": "data_view(\n            \"dataView2\",\n            from: context(entity: \"Administration.AccountPasswordData\", kind: :current),\n            editable: \"never\",\n            read_only_style: \"control\",\n            label_width: 4,\n            show_footer: true,\n            no_entity_message: \"\",\n            tab_index: 1",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "TabIndex"
+          ],
+          "value": 1
+        }
+      ]
+    },
+    {
+      "label": "mendix11-properties",
+      "mpr": "mxcli-sudoku/Sudoku/Sudoku.mpr",
+      "repository": "https://github.com/ako/mxcli-sudoku",
+      "revision": "918af72e43ca8e1d61fb0c32ad13d8da94b944e2",
+      "fixture": {
+        "name": "Sudoku.mpr",
+        "sha256": "18064ecb47c0804eb876370584105b663d689573534c6a93c58e139de448f68f"
+      },
+      "edits": [
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"always\"",
+          "to": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "Editable"
+          ],
+          "value": "Never"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"inherit\"",
+          "to": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "ReadOnlyStyle"
+          ],
+          "value": "Text"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: false",
+          "to": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: true",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "IsPasswordBox"
+          ],
+          "value": true
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: true,\n                          max_length: -1",
+          "to": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: true,\n                          max_length: 32",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "MaxLengthCode"
+          ],
+          "value": 32
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: true,\n                          max_length: 32,\n                          aria_required: false,\n                          tab_index: 0",
+          "to": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: true,\n                          max_length: 32,\n                          aria_required: false,\n                          tab_index: 2",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "TabIndex"
+          ],
+          "value": 2
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"always\",\n                  read_only_style: \"text\",\n                  label_width: 3",
+          "to": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"always\",\n                  read_only_style: \"text\",\n                  label_width: 4",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "LabelWidth"
+          ],
+          "value": 4
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n                      \"dataView1\",\n                      from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                      editable: \"always\",\n                      read_only_style: \"text\",\n                      label_width: 3,\n                      show_footer: false",
+          "to": "data_view(\n                      \"dataView1\",\n                      from: association([[\"Administration.AccountPasswordData_Account\", \"Administration.Account\"]], entity: \"Administration.Account\"),\n                      editable: \"always\",\n                      read_only_style: \"text\",\n                      label_width: 3,\n                      show_footer: true",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView1",
+          "field": [
+            "ShowFooter"
+          ],
+          "value": true
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"always\"",
+          "to": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "Editability"
+          ],
+          "value": "Never"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"text\"",
+          "to": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"control\"",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "ReadOnlyStyle"
+          ],
+          "value": "Control"
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"control\",\n                  label_width: 4,\n                  show_footer: true,\n                  no_entity_message: \"\",\n                  tab_index: 0",
+          "to": "data_view(\n                  \"dataView2\",\n                  from: context(\"AccountPasswordData\", entity: \"Administration.AccountPasswordData\", kind: :page_parameter),\n                  editable: \"never\",\n                  read_only_style: \"control\",\n                  label_width: 4,\n                  show_footer: true,\n                  no_entity_message: \"\",\n                  tab_index: 1",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "dataView2",
+          "field": [
+            "TabIndex"
+          ],
+          "value": 1
+        },
+        {
+          "file": "app/pages/administration/account_new_page.rb",
+          "from": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: true,\n                          max_length: 32,\n                          aria_required: false",
+          "to": "text_box(\n                          \"textBox6\",\n                          attribute: \"Administration.Account.FullName\",\n                          caption: \"Full name\",\n                          editable: \"never\",\n                          read_only_style: \"text\",\n                          placeholder: \"\",\n                          aria_label: \"\",\n                          password: true,\n                          max_length: 32,\n                          aria_required: true",
+          "unit": "Administration.Account_New",
+          "kind": "page",
+          "widget": "textBox6",
+          "field": [
+            "AriaRequired"
+          ],
+          "value": true
+        },
+        {
+          "file": "app/pages/sudoku/home_page.rb",
+          "from": "caption: \"Start easy game\",\n                    button_style: \"primary\"",
+          "to": "caption: \"Start easy game\",\n                    button_style: \"success\"",
+          "unit": "Sudoku.Home",
+          "kind": "page",
+          "widget": "bEasy",
+          "field": [
+            "ButtonStyle"
+          ],
+          "value": "Success"
+        },
+        {
+          "file": "app/pages/sudoku/home_page.rb",
+          "from": "render_mode: \"h1\"",
+          "to": "render_mode: \"h2\"",
+          "unit": "Sudoku.Home",
+          "kind": "page",
+          "widget": "sdHeroTitle",
+          "field": [
+            "RenderMode"
+          ],
+          "value": "H2"
+        }
+      ]
+    }
+  ]
+}

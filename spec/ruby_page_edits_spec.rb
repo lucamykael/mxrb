@@ -189,6 +189,10 @@ RSpec.describe Mxrb::RubyApp::PageEdits do
 
       expect(entry.status).to eq('native')
       expect(entry.reason).to include('applied to its Mendix document')
+      editing = Mxrb::RubyApp::PortabilityReport.new(app).to_h.fetch(:ruby_page_editing)
+      expect(editing.fetch(:scalar_options).fetch('button')).to include('button_style', 'render_type')
+      expect(editing.fetch(:unsupported)).to include('adding or renaming widgets')
+      expect(editing.fetch(:certification)).to include('not certification of every Ruby edit operation')
     end
   end
 

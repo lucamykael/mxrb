@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative 'page_edit_properties'
+
 module Mxrb
   module RubyApp
     # rubocop:disable Metrics
@@ -97,6 +99,8 @@ module Mxrb
           title: page.title.to_s, appearance_class: page.appearance_class.to_s,
           appearance_style: page.appearance_style.to_s,
           allowed_module_roles: Array(page.allowed_module_roles).map(&:to_s),
+          presentation: self.class.comparable(page.presentation_contract || {}),
+          excluded: page.excluded?,
           data_source: self.class.comparable(page.data_source),
           widgets: self.class.comparable(page.widgets)
         }
@@ -124,6 +128,9 @@ module Mxrb
           %i[allowed_module_roles data_source].each do |field|
             unsupported!(field) unless before.fetch(field) == after.fetch(field)
           end
+          unsupported!('presentation parameters, variables, popup or autofocus changed') unless
+            before.fetch(:presentation, {}) == after.fetch(:presentation, {})
+          unsupported!('excluded changed') unless before.fetch(:excluded, false) == after.fetch(:excluded, false)
           compare_scalar_page_fields(before, after)
           compare(before.fetch(:widgets), after.fetch(:widgets), 'widgets', nil, [])
           @changes.uniq!
@@ -171,7 +178,7 @@ module Mxrb
             unless before.values_at('type', 'name') == after.values_at('type', 'name')
 
           (before.keys | after.keys).each do |key|
-            compare(before[key], after[key], "#{path}.#{key}", name, [key])
+            compare(before[key], after[key], "#{path}.#{key}", { name:, type: after.fetch('type') }, [key])
           end
         end
 
@@ -207,9 +214,12 @@ module Mxrb
 
         def compare_values(before, after, path, widget, relative)
           if widget && CAPTION_PATHS.include?(relative)
-            @changes << [:caption, widget, before.to_s, after.to_s]
+            @changes << [:caption, widget.fetch(:name), before.to_s, after.to_s]
           elsif widget && APPEARANCE_PATHS.key?(relative)
-            @changes << [:appearance, widget, APPEARANCE_PATHS.fetch(relative), after.to_s]
+            @changes << [:appearance, widget.fetch(:name), APPEARANCE_PATHS.fetch(relative), after.to_s]
+          elsif widget && relative.size == 2 && relative.first == 'options' &&
+                PageEditProperties.supported?(widget.fetch(:type), relative.last)
+            @changes << [:property, widget.fetch(:name), widget.fetch(:type), relative.last, before, after]
           else
             unsupported!("#{path} changed from #{before.inspect} to #{after.inspect}, " \
                          'which cannot be applied to the document yet')
@@ -237,6 +247,12 @@ module Mxrb
         def page_appearance(key, value) = set_appearance(@raw, key, value, 'the page')
 
         def appearance(name, key, value) = set_appearance(widget(name), key, value, name)
+
+        def property(name, type, key, before, after)
+          PageEditProperties.apply(widget(name), type, key, before, after)
+        rescue ArgumentError => e
+          unsupported!("#{name}.#{key}: #{e.message}")
+        end
 
         # Mendix before 8 keeps the class and style on the widget itself.
         def set_appearance(owner, key, value, label)
